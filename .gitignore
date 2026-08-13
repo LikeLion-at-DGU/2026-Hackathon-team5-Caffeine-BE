@@ -1,6 +1,5 @@
-cat >> .gitignore << 'EOF'
 venv/
 __pycache__/
 *.pyc
 db.sqlite3
-EOF
+.env
