@@ -1,34 +1,24 @@
-import calendar
-from datetime import date
-
 """사업주 부담 4대보험료 계산.
 
-출처(2026년 기준):
-- 국민연금: 4.75% (사업주분), 기준소득월액 상한 6,370,000원 / 하한 400,000원
-- 건강보험: 3.595% (사업주분)
-- 장기요양보험: 건강보험(사업주분) x 13.14%
-- 고용보험: 실업급여 0.9% + 고용안정·직업능력개발사업 0.25%(150인 미만 사업장 기준) = 1.15%
-- 산재보험: 0.8% (도소매·음식·숙박업 기준, 전액 사업주 부담)
+세부 요율/가정은 payroll/services/insurance_common.py 참고.
 
-주의 (하드코딩 가정 — 팀 확인 필요):
-- 업종은 "도소매·음식·숙박업"으로 고정. 실제로는 Business.business_type/business_item에
-  따라 근로복지공단이 다른 사업종류 코드를 부여할 수 있음 (TODO: Business 연동 후 동적 적용).
-- 건강보험은 상한액 미적용 (상한액이 매우 높아 카페 인건비 규모에서 도달 가능성 낮다고 판단).
-- PART_TIME(초단시간근로자)의 고용보험(3개월 이상 근로 시 가입)·국민연금(월소득 220만원 이상 시
-  가입) 예외조건은 미구현 — 우리 서비스에 근속기간 추적 필드가 없어 범위 밖으로 판단.
-  법적으로는 조건 충족 시 추가 부담이 발생할 수 있음.
+- 국민연금/건강보험/장기요양: insurance_common의 공통 요율/상수 사용
+- 고용보험: 실업급여 0.9% + 고용안정·직업능력개발사업 0.25%(150인 미만 사업장 기준) = 1.15% (사업주만 부담하는 항목이라 이 파일에 별도 정의)
+- 산재보험: insurance_common의 INDUSTRIAL_ACCIDENT_RATE 사용, 전액 사업주 부담
 """
 
-NATIONAL_PENSION_RATE = 0.0475
-NATIONAL_PENSION_CAP = 6_370_000
-NATIONAL_PENSION_FLOOR = 400_000
+from payroll.services.insurance_common import (
+    HEALTH_INSURANCE_RATE,
+    INDUSTRIAL_ACCIDENT_RATE,
+    LONG_TERM_CARE_RATE,
+    NATIONAL_PENSION_CAP,
+    NATIONAL_PENSION_FLOOR,
+    NATIONAL_PENSION_RATE,
+    has_worked_three_months_or_more,
+    period_end_date,
+)
 
-HEALTH_INSURANCE_RATE = 0.03595
-LONG_TERM_CARE_RATE = 0.1314  # 건강보험(사업주분)에 곱함
-
-EMPLOYMENT_INSURANCE_RATE = 0.009 + 0.0025  # 실업급여 + 고용안정·직업능력개발사업(150인 미만)
-
-INDUSTRIAL_ACCIDENT_RATE = 0.008  # 도소매·음식·숙박업
+EMPLOYMENT_INSURANCE_EMPLOYER_RATE = 0.009 + 0.0025  # 실업급여 + 고용안정·직업능력개발사업(150인 미만)
 
 
 def calculate_national_pension_employer(gross_pay: int) -> int:
@@ -45,32 +35,11 @@ def calculate_long_term_care_employer(health_insurance_employer: int) -> int:
 
 
 def calculate_employment_insurance_employer(gross_pay: int) -> int:
-    return round(gross_pay * EMPLOYMENT_INSURANCE_RATE)
+    return round(gross_pay * EMPLOYMENT_INSURANCE_EMPLOYER_RATE)
 
 
 def calculate_industrial_accident_employer(gross_pay: int) -> int:
     return round(gross_pay * INDUSTRIAL_ACCIDENT_RATE)
-
-
-def _period_end_date(period_year: int, period_month: int) -> date:
-    """급여 대상 월의 말일 — 고용보험 3개월 경과 여부 판정 기준일로 사용."""
-    last_day = calendar.monthrange(period_year, period_month)[1]
-    return date(period_year, period_month, last_day)
-
-
-def _has_worked_three_months_or_more(work_started_at: date | None, reference_date: date) -> bool:
-    """근무시작일 기준 3개월 이상 경과했는지 판정.
-    work_started_at이 없으면(미입력) 보수적으로 False 처리 — 데이터 없이 고용보험을 부과하지 않음.
-    """
-    if work_started_at is None:
-        return False
-
-    year = work_started_at.year + (work_started_at.month - 1 + 3) // 12
-    month = (work_started_at.month - 1 + 3) % 12 + 1
-    day = min(work_started_at.day, calendar.monthrange(year, month)[1])
-    three_months_later = date(year, month, day)
-
-    return reference_date >= three_months_later
 
 
 def calculate_employer_insurance_total(employee, gross_pay: int, period_year: int, period_month: int) -> int:
@@ -86,8 +55,8 @@ def calculate_employer_insurance_total(employee, gross_pay: int, period_year: in
     if employee.employment_type == "PART_TIME":
         total = calculate_industrial_accident_employer(gross_pay)
 
-        reference_date = _period_end_date(period_year, period_month)
-        if _has_worked_three_months_or_more(employee.work_started_at, reference_date):
+        reference_date = period_end_date(period_year, period_month)
+        if has_worked_three_months_or_more(employee.work_started_at, reference_date):
             total += calculate_employment_insurance_employer(gross_pay)
 
         return total
