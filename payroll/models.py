@@ -16,6 +16,7 @@ class Employee(models.Model):
     monthly_contracted_hours = models.DecimalField(
         max_digits=6, decimal_places=1, null=True, blank=True
     )
+    work_started_at = models.DateField(null=True, blank=True)
     rrn_front_encrypted = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

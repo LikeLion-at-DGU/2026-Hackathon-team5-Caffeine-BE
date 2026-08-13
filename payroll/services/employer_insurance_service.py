@@ -1,3 +1,6 @@
+import calendar
+from datetime import date
+
 """사업주 부담 4대보험료 계산.
 
 출처(2026년 기준):
@@ -49,17 +52,47 @@ def calculate_industrial_accident_employer(gross_pay: int) -> int:
     return round(gross_pay * INDUSTRIAL_ACCIDENT_RATE)
 
 
-def calculate_employer_insurance_total(employment_type: str, gross_pay: int) -> int:
-    """직원 고용형태에 따른 사업주 부담 4대보험료 합계."""
-    if employment_type == "FREELANCER":
-        # 근로기준법상 근로자가 아니므로 4대보험 사업주 부담 의무 없음
+def _period_end_date(period_year: int, period_month: int) -> date:
+    """급여 대상 월의 말일 — 고용보험 3개월 경과 여부 판정 기준일로 사용."""
+    last_day = calendar.monthrange(period_year, period_month)[1]
+    return date(period_year, period_month, last_day)
+
+
+def _has_worked_three_months_or_more(work_started_at: date | None, reference_date: date) -> bool:
+    """근무시작일 기준 3개월 이상 경과했는지 판정.
+    work_started_at이 없으면(미입력) 보수적으로 False 처리 — 데이터 없이 고용보험을 부과하지 않음.
+    """
+    if work_started_at is None:
+        return False
+
+    year = work_started_at.year + (work_started_at.month - 1 + 3) // 12
+    month = (work_started_at.month - 1 + 3) % 12 + 1
+    day = min(work_started_at.day, calendar.monthrange(year, month)[1])
+    three_months_later = date(year, month, day)
+
+    return reference_date >= three_months_later
+
+
+def calculate_employer_insurance_total(employee, gross_pay: int, period_year: int, period_month: int) -> int:
+    """직원 고용형태·근무기간에 따른 사업주 부담 4대보험료 합계.
+
+    PART_TIME: 산재보험은 항상 포함. 고용보험은 근무시작일 기준 3개월 이상 경과 시에만 포함.
+    국민연금(월소득 220만원 이상 시 가입)·건강보험(월 60시간 이상 시 가입) 조건은 미구현 —
+    카페 인건비 규모에서 해당 가능성이 낮다고 판단해 범위에서 제외 (2026-08-13 팀 결정).
+    """
+    if employee.employment_type == "FREELANCER":
         return 0
 
-    if employment_type == "PART_TIME":
-        # 산재보험은 근무시간 무관 무조건 적용. 나머지는 예외조건 미구현으로 0 처리.
-        return calculate_industrial_accident_employer(gross_pay)
+    if employee.employment_type == "PART_TIME":
+        total = calculate_industrial_accident_employer(gross_pay)
 
-    if employment_type == "FULL_TIME":
+        reference_date = _period_end_date(period_year, period_month)
+        if _has_worked_three_months_or_more(employee.work_started_at, reference_date):
+            total += calculate_employment_insurance_employer(gross_pay)
+
+        return total
+
+    if employee.employment_type == "FULL_TIME":
         national_pension = calculate_national_pension_employer(gross_pay)
         health_insurance = calculate_health_insurance_employer(gross_pay)
         long_term_care = calculate_long_term_care_employer(health_insurance)
@@ -67,4 +100,4 @@ def calculate_employer_insurance_total(employment_type: str, gross_pay: int) -> 
         industrial_accident = calculate_industrial_accident_employer(gross_pay)
         return national_pension + health_insurance + long_term_care + employment_insurance + industrial_accident
 
-    raise ValueError(f"알 수 없는 employment_type: {employment_type}")
+    raise ValueError(f"알 수 없는 employment_type: {employee.employment_type}")

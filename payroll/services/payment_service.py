@@ -55,6 +55,7 @@ def list_payments(year: int | None = None, month: int | None = None):
         qs = qs.filter(month=month)
     return qs
 
+
 def get_monthly_summary(year: int, month: int) -> dict:
     payments = list_payments(year=year, month=month)
 
@@ -63,7 +64,7 @@ def get_monthly_summary(year: int, month: int) -> dict:
     for payment in payments:
         total_labor_cost += payment.gross_pay
         total_labor_cost += calculate_employer_insurance_total(
-            payment.employee.employment_type, payment.gross_pay
+            payment.employee, payment.gross_pay, year, month
         )
         total_withholding_tax += payment.withholding_tax
 
