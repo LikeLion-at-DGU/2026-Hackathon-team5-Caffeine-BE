@@ -16,6 +16,7 @@ from datetime import date
 
 from django.http import HttpResponse
 from payroll.services.payslip_pdf_service import generate_payslip_pdf
+from payroll.services.payslip_xlsx_service import generate_payslip_xlsx
 
 
 def _error_response(code: str, message: str, http_status: int, errors: dict | None = None) -> Response:
@@ -184,6 +185,20 @@ class PayrollSummaryView(APIView):
         })
 
 
+class PaymentPayslipView(APIView):
+    def get(self, request, payment_id):
+        try:
+            payment = payment_service.get_payment(payment_id)
+        except PayrollServiceError as e:
+            return _error_response(e.code, e.message, status.HTTP_404_NOT_FOUND)
+
+        pdf_bytes = generate_payslip_pdf([payment])
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        filename = f"payslip_{payment.employee.name}_{payment.year}_{payment.month}.pdf"
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
 class PaymentExportView(APIView):
     def post(self, request):
         year = request.data.get("year")
@@ -202,10 +217,13 @@ class PaymentExportView(APIView):
             )
 
         if export_format == "xlsx":
-            # TODO: 엑셀 내보내기 미구현
-            return _error_response(
-                "NOT_IMPLEMENTED", "엑셀 내보내기는 아직 지원하지 않습니다.", status.HTTP_501_NOT_IMPLEMENTED
+            xlsx_bytes = generate_payslip_xlsx(list(payments), int(year), int(month))
+            response = HttpResponse(
+                xlsx_bytes,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
+            response["Content-Disposition"] = f'attachment; filename="payslip_{year}_{month}.xlsx"'
+            return response
 
         pdf_bytes = generate_payslip_pdf(list(payments))
         response = HttpResponse(pdf_bytes, content_type="application/pdf")

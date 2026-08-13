@@ -25,9 +25,17 @@ class PaymentExportAPITests(TestCase):
         # PDF 파일은 항상 %PDF로 시작함
         self.assertTrue(response.content.startswith(b"%PDF"))
 
-    def test_export_xlsx_returns_not_implemented(self):
+    def test_export_xlsx_returns_xlsx_file(self):
         response = self.client.post(self.url, {"year": 2026, "month": 8, "format": "xlsx"}, format="json")
-        self.assertEqual(response.status_code, 501)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertGreater(len(response.content), 0)
+        # XLSX(zip 기반 포맷)는 항상 PK로 시작함
+        self.assertTrue(response.content.startswith(b"PK"))
 
     def test_export_invalid_format_returns_400(self):
         response = self.client.post(self.url, {"year": 2026, "month": 8, "format": "hwp"}, format="json")
