@@ -11,16 +11,15 @@ PART_TIME 고용보험 3개월 판정 로직은 사업주 부담과 동일하게
 import calendar
 from datetime import date
 
-from payroll.services.employer_insurance_service import (
+from payroll.services.insurance_common import (
+    HEALTH_INSURANCE_RATE,
+    LONG_TERM_CARE_RATE,
     NATIONAL_PENSION_CAP,
     NATIONAL_PENSION_FLOOR,
     NATIONAL_PENSION_RATE,
-    HEALTH_INSURANCE_RATE,
-    LONG_TERM_CARE_RATE,
-    _has_worked_three_months_or_more,
-    _period_end_date,
+    has_worked_three_months_or_more,
+    period_end_date,
 )
-
 EMPLOYMENT_INSURANCE_EMPLOYEE_RATE = 0.009  # 실업급여분만 (고용안정·직업능력개발사업 제외)
 
 
@@ -48,8 +47,8 @@ def calculate_employee_insurance_breakdown(employee, gross_pay: int, period_year
 
     if employee.employment_type == "PART_TIME":
         employment_insurance = 0
-        reference_date = _period_end_date(period_year, period_month)
-        if _has_worked_three_months_or_more(employee.work_started_at, reference_date):
+        reference_date = period_end_date(period_year, period_month)
+        if has_worked_three_months_or_more(employee.work_started_at, reference_date):
             employment_insurance = calculate_employment_insurance_employee(gross_pay)
         return {
             "national_pension": 0, "health_insurance": 0, "long_term_care": 0,

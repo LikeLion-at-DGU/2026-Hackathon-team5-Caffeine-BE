@@ -3,6 +3,8 @@ from payroll.models import Employee, Payment
 from payroll.services import employee_service
 from payroll.services.withholding_tax_service import calculate_gross_pay, calculate_withholding_tax
 from payroll.services.employer_insurance_service import calculate_employer_insurance_total
+from payroll.services.employee_insurance_service import calculate_employee_insurance_breakdown
+from payroll.services.withholding_tax_service import calculate_withholding_breakdown
 
 
 def _calculate_and_build(employee: Employee, year: int, month: int, work_hours) -> dict:
@@ -72,4 +74,34 @@ def get_monthly_summary(year: int, month: int) -> dict:
         "employee_count": payments.count(),
         "total_labor_cost": total_labor_cost,
         "withholding_tax": total_withholding_tax,
+    }
+
+
+def get_payslip_data(payment) -> dict:
+    """임금명세서/지급명세서에 필요한 전체 데이터 (소득세/지방소득세/4대보험 항목별 분리 + 실수령액)."""
+    employee = payment.employee
+    breakdown = calculate_withholding_breakdown(employee.employment_type, payment.gross_pay)
+    insurance = calculate_employee_insurance_breakdown(
+        employee, payment.gross_pay, payment.year, payment.month
+    )
+
+    deductions_total = breakdown["total"] + insurance["total"]
+    net_pay = payment.gross_pay - deductions_total
+
+    return {
+        "employee_name": employee.name,
+        "employment_type": employee.employment_type,
+        "year": payment.year,
+        "month": payment.month,
+        "work_hours": payment.work_hours,
+        "hourly_wage": employee.hourly_wage,
+        "gross_pay": payment.gross_pay,
+        "income_tax": breakdown["income_tax"],
+        "local_income_tax": breakdown["local_income_tax"],
+        "national_pension": insurance["national_pension"],
+        "health_insurance": insurance["health_insurance"],
+        "long_term_care": insurance["long_term_care"],
+        "employment_insurance": insurance["employment_insurance"],
+        "deductions_total": deductions_total,
+        "net_pay": net_pay,
     }
