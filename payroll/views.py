@@ -11,6 +11,7 @@ from payroll.serializers import (
     PaymentCreateSerializer, PaymentListItemSerializer, PaymentUpdateSerializer,
 )
 from payroll.services import payment_service
+from datetime import date
 
 
 def _error_response(code: str, message: str, http_status: int, errors: dict | None = None) -> Response:
@@ -153,4 +154,27 @@ class PaymentDetailView(APIView):
                 "gross_pay": payment.gross_pay,
                 "withholding_tax": payment.withholding_tax,
             },
+        })
+
+
+class PayrollSummaryView(APIView):
+    def get(self, request):
+        year = request.query_params.get("year")
+        month = request.query_params.get("month")
+        if not year or not month:
+            return _error_response(
+                "INVALID_PERIOD", "조회 기간이 올바르지 않습니다.", status.HTTP_400_BAD_REQUEST
+            )
+
+        summary = payment_service.get_monthly_summary(int(year), int(month))
+
+        # 원천세 납부 마감일: 익월 10일 (Figma "9월 10일 원천세 납부 예정" 예시와 일치)
+        due_year, due_month = (int(year), int(month) + 1) if int(month) < 12 else (int(year) + 1, 1)
+        payment_due_date = date(due_year, due_month, 10).isoformat()
+
+        return Response({
+            "success": True,
+            "code": "PAYROLL_SUMMARY_SUCCESS",
+            "message": "월별 노무 요약을 조회했습니다.",
+            "data": {**summary, "payment_due_date": payment_due_date},
         })

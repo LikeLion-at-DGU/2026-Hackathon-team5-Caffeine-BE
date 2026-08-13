@@ -2,6 +2,7 @@ from payroll.exceptions import PayrollAlreadyExists, PaymentNotFound, Withholdin
 from payroll.models import Employee, Payment
 from payroll.services import employee_service
 from payroll.services.withholding_tax_service import calculate_gross_pay, calculate_withholding_tax
+from payroll.services.employer_insurance_service import calculate_employer_insurance_total
 
 
 def _calculate_and_build(employee: Employee, year: int, month: int, work_hours) -> dict:
@@ -53,3 +54,21 @@ def list_payments(year: int | None = None, month: int | None = None):
     if month is not None:
         qs = qs.filter(month=month)
     return qs
+
+def get_monthly_summary(year: int, month: int) -> dict:
+    payments = list_payments(year=year, month=month)
+
+    total_labor_cost = 0
+    total_withholding_tax = 0
+    for payment in payments:
+        total_labor_cost += payment.gross_pay
+        total_labor_cost += calculate_employer_insurance_total(
+            payment.employee.employment_type, payment.gross_pay
+        )
+        total_withholding_tax += payment.withholding_tax
+
+    return {
+        "employee_count": payments.count(),
+        "total_labor_cost": total_labor_cost,
+        "withholding_tax": total_withholding_tax,
+    }
