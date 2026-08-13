@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from payroll.models import Employee
 
+from payroll.models import Payment
 
 class EmployeeCreateSerializer(serializers.ModelSerializer):
     rrn_front = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -38,3 +39,30 @@ class EmployeeListItemSerializer(serializers.ModelSerializer):
 
     def get_status(self, obj):
         return "ACTIVE"
+
+
+
+
+class PaymentCreateSerializer(serializers.Serializer):
+    employee_id = serializers.IntegerField()
+    year = serializers.IntegerField()
+    month = serializers.IntegerField(min_value=1, max_value=12)
+    work_hours = serializers.DecimalField(max_digits=6, decimal_places=1, min_value=0)
+
+
+class PaymentUpdateSerializer(serializers.Serializer):
+    work_hours = serializers.DecimalField(max_digits=6, decimal_places=1, min_value=0)
+
+
+class PaymentListItemSerializer(serializers.ModelSerializer):
+    payment_id = serializers.IntegerField(source="id")
+    employee_id = serializers.IntegerField(source="employee.id")
+    employee_name = serializers.CharField(source="employee.name")
+    employment_type = serializers.CharField(source="employee.employment_type")
+
+    class Meta:
+        model = Payment
+        fields = [
+            "payment_id", "employee_id", "employee_name", "employment_type",
+            "work_hours", "gross_pay", "withholding_tax",
+        ]

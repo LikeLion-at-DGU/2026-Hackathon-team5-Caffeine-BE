@@ -17,3 +17,17 @@ class EmployeeAlreadyExists(PayrollServiceError):
 class EmployeeHasPayrollData(PayrollServiceError):
     code = "EMPLOYEE_HAS_PAYROLL_DATA"
     message = "급여 기록이 존재하는 직원은 삭제할 수 없습니다."
+
+class PaymentNotFound(PayrollServiceError):
+    code = "PAYMENT_NOT_FOUND"
+    message = "급여 정보를 찾을 수 없습니다."
+
+
+class PayrollAlreadyExists(PayrollServiceError):
+    code = "PAYROLL_ALREADY_EXISTS"
+    message = "해당 월의 급여 정보가 이미 존재합니다."
+
+
+class WithholdingCalculationNotReady(PayrollServiceError):
+    code = "WITHHOLDING_CALCULATION_NOT_READY"
+    message = "해당 고용형태의 원천세 계산 로직이 아직 준비되지 않았습니다."

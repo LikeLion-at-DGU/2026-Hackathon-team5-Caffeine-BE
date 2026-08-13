@@ -29,3 +29,22 @@ class Employee(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.get_employment_type_display()})"
+
+class Payment(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="payments")
+    year = models.PositiveIntegerField()
+    month = models.PositiveSmallIntegerField()
+    work_hours = models.DecimalField(max_digits=6, decimal_places=1)
+    gross_pay = models.PositiveIntegerField()
+    withholding_tax = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee", "year", "month"], name="uniq_employee_payment_per_month"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.employee.name} {self.year}-{self.month:02d}"

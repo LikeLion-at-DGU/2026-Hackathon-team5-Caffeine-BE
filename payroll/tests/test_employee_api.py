@@ -1,8 +1,7 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from payroll.models import Employee
-
+from payroll.models import Employee, Payment
 
 class EmployeeCreateAPITests(TestCase):
     def setUp(self):
@@ -115,3 +114,14 @@ class EmployeeDetailAPITests(TestCase):
     def test_delete_nonexistent_employee_returns_404(self):
         response = self.client.delete("/api/payroll/employees/9999/")
         self.assertEqual(response.status_code, 404)
+
+    def test_delete_employee_with_payment_data_returns_409(self):
+        Payment.objects.create(
+            employee=self.employee, year=2026, month=8,
+            work_hours=80, gross_pay=1_200_000, withholding_tax=39_600,
+        )
+        response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["code"], "EMPLOYEE_HAS_PAYROLL_DATA")
+        self.assertTrue(Employee.objects.filter(id=self.employee.id).exists())
