@@ -6,11 +6,7 @@ from payroll.services.withholding_tax_service import calculate_gross_pay, calcul
 
 def _calculate_and_build(employee: Employee, year: int, month: int, work_hours) -> dict:
     gross_pay = calculate_gross_pay(employee.hourly_wage, work_hours)
-    try:
-        withholding_tax = calculate_withholding_tax(employee.employment_type, gross_pay)
-    except NotImplementedError:
-        # FULL_TIME/PART_TIME 간이세액표 미구현 상태 — 명확한 에러로 안내
-        raise WithholdingCalculationNotReady()
+    withholding_tax = calculate_withholding_tax(employee.employment_type, gross_pay)
 
     return {
         "year": year,

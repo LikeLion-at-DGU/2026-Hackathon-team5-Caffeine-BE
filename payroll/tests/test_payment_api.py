@@ -28,22 +28,42 @@ class PaymentCreateAPITests(TestCase):
         self.assertEqual(response.data["data"]["gross_pay"], 1_200_000)
         self.assertEqual(response.data["data"]["withholding_tax"], 39_600)
 
-    def test_create_payment_for_full_time_returns_not_implemented(self):
-        # 간이세액표 미구현 상태 — 501로 명확히 안내되어야 함
+    def test_create_payment_for_full_time_calculates_simplified_tax(self):
+        # 10320 * 141 = 1,455,120원 -> 간이세액표(부양가족 1인) 기준 7,940원
         payload = {"employee_id": self.full_timer.id, "year": 2026, "month": 8, "work_hours": 141}
         response = self.client.post(self.url, payload, format="json")
 
-        self.assertEqual(response.status_code, 501)
-        self.assertEqual(response.data["code"], "WITHHOLDING_CALCULATION_NOT_READY")
-        # 계산 실패 시 DB에 저장되면 안 됨
-        self.assertFalse(Payment.objects.filter(employee=self.full_timer).exists())
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["data"]["gross_pay"], 1_455_120)
+        self.assertEqual(response.data["data"]["withholding_tax"], 7_940)
 
-    def test_create_payment_for_part_time_returns_not_implemented(self):
+    def test_create_payment_for_part_time_below_minimum_returns_zero_tax(self):
+        # 10320 * 43.2 = 445,824원 -> 770,000원 미만이라 세액 0원 (소액부징수 이전에 표 자체가 0)
         payload = {"employee_id": self.part_timer.id, "year": 2026, "month": 8, "work_hours": 43.2}
         response = self.client.post(self.url, payload, format="json")
 
-        self.assertEqual(response.status_code, 501)
-        self.assertEqual(response.data["code"], "WITHHOLDING_CALCULATION_NOT_READY")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["data"]["gross_pay"], 445_824)
+        self.assertEqual(response.data["data"]["withholding_tax"], 0)
+
+    def test_full_time_income_under_770k_returns_zero_tax(self):
+        # 10320 * 70 = 722,400원 -> 표 시작점(770,000원) 미만이므로 0원
+        employee = self.full_timer
+        payload = {"employee_id": employee.id, "year": 2026, "month": 9, "work_hours": 70}
+        response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["data"]["withholding_tax"], 0)
+
+    def test_full_time_income_at_bracket_boundary(self):
+        # 정확히 1,060,000원 -> 아직 0원 (다음 구간부터 과세 시작)
+        employee = self.full_timer
+        # 10320 * 102.71 ≈ 1,059,973 (경계 근처 검증용, 시급 고정이라 근사)
+        payload = {"employee_id": employee.id, "year": 2026, "month": 10, "work_hours": 102.7}
+        response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["data"]["withholding_tax"], 0)
 
     def test_create_payment_for_nonexistent_employee_returns_404(self):
         payload = {"employee_id": 9999, "year": 2026, "month": 8, "work_hours": 80}
