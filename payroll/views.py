@@ -14,6 +14,10 @@ from payroll.services import payment_service
 from datetime import date
 
 
+from django.http import HttpResponse
+from payroll.services.payslip_pdf_service import generate_payslip_pdf
+
+
 def _error_response(code: str, message: str, http_status: int, errors: dict | None = None) -> Response:
     return Response(
         {"success": False, "code": code, "message": message, "errors": errors or {}},
@@ -178,3 +182,32 @@ class PayrollSummaryView(APIView):
             "message": "월별 노무 요약을 조회했습니다.",
             "data": {**summary, "payment_due_date": payment_due_date},
         })
+
+
+class PaymentExportView(APIView):
+    def post(self, request):
+        year = request.data.get("year")
+        month = request.data.get("month")
+        export_format = request.data.get("format")
+
+        if not year or not month or export_format not in ("pdf", "xlsx"):
+            return _error_response(
+                "INVALID_EXPORT_FORMAT", "지원하지 않는 파일 형식입니다.", status.HTTP_400_BAD_REQUEST
+            )
+
+        payments = payment_service.list_payments(year=int(year), month=int(month))
+        if not payments.exists():
+            return _error_response(
+                "PAYROLL_DATA_NOT_FOUND", "해당 월의 급여 정보가 없습니다.", status.HTTP_404_NOT_FOUND
+            )
+
+        if export_format == "xlsx":
+            # TODO: 엑셀 내보내기 미구현
+            return _error_response(
+                "NOT_IMPLEMENTED", "엑셀 내보내기는 아직 지원하지 않습니다.", status.HTTP_501_NOT_IMPLEMENTED
+            )
+
+        pdf_bytes = generate_payslip_pdf(list(payments))
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="payslip_{year}_{month}.pdf"'
+        return response
