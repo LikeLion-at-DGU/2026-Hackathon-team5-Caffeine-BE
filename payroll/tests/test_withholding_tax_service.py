@@ -1,0 +1,58 @@
+from django.test import SimpleTestCase
+
+from payroll.services.withholding_tax_service import (
+    calculate_freelancer_tax,
+    calculate_gross_pay,
+    calculate_withholding_tax,
+)
+
+
+class FreelancerTaxTests(SimpleTestCase):
+    def test_calculates_3_3_percent(self):
+        # 1,200,000원 × 3.3% = 39,600원
+        self.assertEqual(calculate_freelancer_tax(1_200_000), 39_600)
+
+    def test_rounds_to_nearest_won(self):
+        # 100,000원 × 3.3% = 3,300원 (반올림 확인용 케이스)
+        self.assertEqual(calculate_freelancer_tax(100_000), 3_300)
+
+    def test_minor_withholding_below_threshold_returns_zero(self):
+        # 세액이 1,000원 미만이면 소액부징수로 0원 처리
+        # 30,000원 × 3.3% = 990원 → 0원이어야 함
+        self.assertEqual(calculate_freelancer_tax(30_000), 0)
+
+    def test_minor_withholding_at_threshold_is_collected(self):
+        # 세액이 정확히 1,000원 이상이면 징수
+        # 30,304원 × 3.3% ≈ 1,000.032 → round 시 1,000원
+        self.assertEqual(calculate_freelancer_tax(30_304), 1_000)
+
+    def test_zero_gross_pay_returns_zero(self):
+        self.assertEqual(calculate_freelancer_tax(0), 0)
+
+
+class DispatcherTests(SimpleTestCase):
+    def test_freelancer_dispatches_correctly(self):
+        self.assertEqual(calculate_withholding_tax("FREELANCER", 1_200_000), 39_600)
+
+    def test_full_time_raises_not_implemented(self):
+        with self.assertRaises(NotImplementedError):
+            calculate_withholding_tax("FULL_TIME", 1_200_000)
+
+    def test_part_time_raises_not_implemented(self):
+        with self.assertRaises(NotImplementedError):
+            calculate_withholding_tax("PART_TIME", 1_200_000)
+
+    def test_unknown_type_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            calculate_withholding_tax("UNKNOWN", 1_200_000)
+
+
+class GrossPayTests(SimpleTestCase):
+    def test_calculates_hourly_wage_times_hours(self):
+        # 10,320원 × 141시간 = 1,455,120원 (Figma 예시와 일치 확인)
+        self.assertEqual(calculate_gross_pay(10_320, 141), 1_455_120)
+
+    def test_handles_decimal_hours(self):
+        # 10,320원 × 43.2시간 = 445,824원 (Figma 예시와 일치 확인)
+        from decimal import Decimal
+        self.assertEqual(calculate_gross_pay(10_320, Decimal("43.2")), 445_824)
