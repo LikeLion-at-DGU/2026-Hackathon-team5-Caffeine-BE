@@ -19,10 +19,10 @@ class PayrollSummaryAPITests(TestCase):
             name="김프리", employment_type="FREELANCER", hourly_wage=15000
         )
 
-        # 정직원: 141시간 -> 1,455,120원, 원천세 7,940원
+        # 정직원: 141시간 -> 1,455,120원, 원천세(소득세+지방소득세) 8,734원
         Payment.objects.create(
             employee=self.full_timer, year=2026, month=8,
-            work_hours=141, gross_pay=1_455_120, withholding_tax=7_940,
+            work_hours=141, gross_pay=1_455_120, withholding_tax=8_734,
         )
         # 단시간: 43.2시간 -> 445,824원, 원천세 0원 (770,000 미만)
         Payment.objects.create(
@@ -42,8 +42,8 @@ class PayrollSummaryAPITests(TestCase):
 
     def test_summary_total_withholding_tax_is_sum_of_all(self):
         response = self.client.get(self.url, {"year": 2026, "month": 8})
-        # 7,940 + 0 + 39,600 = 47,540
-        self.assertEqual(response.data["data"]["withholding_tax"], 47_540)
+        # 8,734 + 0 + 39,600 = 48,334
+        self.assertEqual(response.data["data"]["withholding_tax"], 48_334)
 
     def test_summary_labor_cost_includes_employer_insurance(self):
         response = self.client.get(self.url, {"year": 2026, "month": 8})

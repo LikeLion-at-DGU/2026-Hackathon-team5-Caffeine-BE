@@ -35,7 +35,7 @@ class PaymentCreateAPITests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["data"]["gross_pay"], 1_455_120)
-        self.assertEqual(response.data["data"]["withholding_tax"], 7_940)
+        self.assertEqual(response.data["data"]["withholding_tax"], 8_734)
 
     def test_create_payment_for_part_time_below_minimum_returns_zero_tax(self):
         # 10320 * 43.2 = 445,824원 -> 770,000원 미만이라 세액 0원 (소액부징수 이전에 표 자체가 0)
