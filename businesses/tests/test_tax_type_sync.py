@@ -139,3 +139,35 @@ class TaxTypeSyncTests(APITestCase):
         # 알 수 없는 코드는 이전 값 대신 UNKNOWN으로 저장한다.
         self.assertEqual(self.business.tax_type_code, "999")
         self.assertEqual(self.business.tax_type, "UNKNOWN")
+        
+    def test_sync_creates_history_when_code_actually_changes(self):
+        # [중요] 이전엔 "1->1이면 이력 안 생김"만 테스트했는데, 정작
+        # "1->2로 진짜 바뀌면 이력이 생긴다"는 테스트가 없었다. 코드리뷰로
+        # 발견된 부분이라 이번엔 처음부터 같이 넣는다.
+        self.business.tax_type_code = "1"
+        self.business.tax_type = "GENERAL"
+        self.business.save()
+
+        changed_result = {
+            "outcome": "SUCCESS", "company_identity_no": "", "business_status": "계속사업자",
+            "taxation_type_code": "2", "closing_date": "", "transfer_tax_type_date": "20260701",
+        }
+        url = reverse("business-tax-type-sync", kwargs={"pk": self.business.id})
+        with patch("businesses.services.tax_type_service.get_codef_provider") as mock_factory:
+            mock_factory.return_value.get_business_status.return_value = changed_result
+            res = self.client.post(url)
+
+        self.assertEqual(res.status_code, 200)
+        self.business.refresh_from_db()
+        self.assertEqual(self.business.tax_type_code, "2")
+        self.assertEqual(self.business.tax_type, "SIMPLE")
+
+        history = TaxTypeHistory.objects.get(business=self.business)
+        self.assertEqual(history.before_code, "1")
+        self.assertEqual(history.after_code, "2")
+
+        # 방금 만들어진 이력이 GET history API에서도 바로 조회되는지 확인
+        history_url = reverse("business-tax-type-history", kwargs={"pk": self.business.id})
+        res = self.client.get(history_url)
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data[0]["after_code"], "2")

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Business
+from .models import Business, TaxTypeHistory
 
 
 class BusinessSerializer(serializers.ModelSerializer):
@@ -20,10 +20,7 @@ class BusinessSerializer(serializers.ModelSerializer):
             "is_demo",
         ]
 
-        # 조회만 가능하고 사용자가 직접 수정할 수 없는 필드
-        # - business_status, tax_type 관련 값: CODEF 동기화 API에서만 변경
-        # - is_demo: 서버에서 관리하는 값
-        # - id: 자동 생성되는 식별자
+        # CODEF 또는 서버에서 관리하는 값은 사용자가 직접 수정하지 못하도록 설정
         read_only_fields = [
             "id",
             "business_status",
@@ -31,4 +28,19 @@ class BusinessSerializer(serializers.ModelSerializer):
             "tax_type_code",
             "tax_type_changed_date",
             "is_demo",
+        ]
+
+
+class TaxTypeHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaxTypeHistory
+
+        # 사업장 정보는 URL로 식별되므로 변경 이력만 반환
+        fields = [
+            "id",
+            "before_code",
+            "after_code",
+            "effective_date",
+            "source",
+            "created_at",
         ]
