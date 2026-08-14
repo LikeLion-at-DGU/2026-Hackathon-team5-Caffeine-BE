@@ -22,13 +22,14 @@ class FreelancerTaxTests(SimpleTestCase):
         # 100,000원 × 3.3% = 3,300원 (반올림 확인용 케이스)
         self.assertEqual(calculate_freelancer_tax(100_000), 3_300)
 
-    def test_minor_withholding_below_threshold_stays_zero(self):
-        # 30,304원: 소득세 909원 + 지방소득세 90원 = 999원 -> 소액부징수로 0원
-        self.assertEqual(calculate_freelancer_tax(30_304), 0)
+    def test_small_amount_still_withheld_no_minor_exemption(self):
+        # 30,000원: 소득세 900원 + 지방소득세 90원 = 990원
+        # 프리랜서(인적용역 사업소득)는 2024.7.1.부터 소액부징수 적용 제외 -> 그대로 징수
+        self.assertEqual(calculate_freelancer_tax(30_000), 990)
 
-    def test_minor_withholding_at_threshold_is_collected(self):
-        # 30,317원: 소득세 910원 + 지방소득세 91원 = 1,001원 -> 징수
-        self.assertEqual(calculate_freelancer_tax(30_317), 1_001)
+    def test_very_small_amount_still_withheld(self):
+        # 30,304원: 소득세 909원 + 지방소득세 90원 = 999원 -> 소액부징수 미적용, 그대로 징수
+        self.assertEqual(calculate_freelancer_tax(30_304), 999)
 
     def test_zero_gross_pay_returns_zero(self):
         self.assertEqual(calculate_freelancer_tax(0), 0)

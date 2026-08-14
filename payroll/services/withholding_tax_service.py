@@ -72,16 +72,21 @@ def calculate_local_income_tax(income_tax: int) -> int:
 
 
 def calculate_withholding_breakdown(employment_type: str, gross_pay: int) -> dict:
-    """원천세를 소득세/지방소득세로 분리해서 반환. 임금명세서 등 항목별 표시가 필요한 곳에서 사용.
-    합계가 소액부징수 기준(1,000원) 미만이면 전부 0으로 처리.
+    """원천세를 소득세/지방소득세로 분리해서 반환.
+
+    소액부징수(원천징수세액 1,000원 미만 시 미징수) 규칙:
+    - FREELANCER(인적용역 사업소득): 2024.7.1. 지급분부터 소액부징수 적용 제외
+      (국세청 확인, 계속적·반복적 인적용역 대가는 금액과 무관하게 항상 징수)
+    - FULL_TIME/PART_TIME(근로소득, 간이세액표): 소득세(국세) 단독 1,000원 미만
+      여부로 판정 — 지방소득세를 더한 합계 기준이 아님
     """
     income_tax = calculate_income_tax(employment_type, gross_pay)
     local_income_tax = calculate_local_income_tax(income_tax)
-    total = income_tax + local_income_tax
 
-    if total < MINOR_WITHHOLDING_THRESHOLD:
+    if employment_type != "FREELANCER" and income_tax < MINOR_WITHHOLDING_THRESHOLD:
         return {"income_tax": 0, "local_income_tax": 0, "total": 0}
-    return {"income_tax": income_tax, "local_income_tax": local_income_tax, "total": total}
+
+    return {"income_tax": income_tax, "local_income_tax": local_income_tax, "total": income_tax + local_income_tax}
 
 
 def calculate_withholding_tax(employment_type: str, gross_pay: int) -> int:
