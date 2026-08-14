@@ -3,10 +3,10 @@
 세부 요율/가정은 payroll/services/insurance_common.py 참고.
 """
 
+from payroll.services.industrial_accident_rates import get_industrial_accident_rate
 from payroll.services.insurance_common import (
     COMMUTE_ACCIDENT_RATE,
     HEALTH_INSURANCE_RATE,
-    INDUSTRIAL_ACCIDENT_RATE,
     LONG_TERM_CARE_RATE,
     NATIONAL_PENSION_CAP,
     NATIONAL_PENSION_FLOOR,
@@ -33,9 +33,10 @@ def calculate_employment_insurance_employer(gross_pay: int) -> int:
     return round(gross_pay * EMPLOYMENT_INSURANCE_EMPLOYER_RATE)
 
 
-def calculate_industrial_accident_employer(gross_pay: int) -> int:
-    """사업종류별 산재보험료율 + 전 업종 공통 출퇴근재해요율."""
-    return round(gross_pay * (INDUSTRIAL_ACCIDENT_RATE + COMMUTE_ACCIDENT_RATE))
+def calculate_industrial_accident_employer(gross_pay: int, business) -> int:
+    """사업종류별 산재보험료율(Business 기반 동적 매핑) + 전 업종 공통 출퇴근재해요율."""
+    rate = get_industrial_accident_rate(business) + COMMUTE_ACCIDENT_RATE
+    return round(gross_pay * rate)
 
 
 def calculate_employer_insurance_total(employee, gross_pay: int) -> int:
@@ -51,7 +52,7 @@ def calculate_employer_insurance_total(employee, gross_pay: int) -> int:
         return 0
 
     if employee.employment_type == "PART_TIME":
-        total = calculate_industrial_accident_employer(gross_pay)
+        total = calculate_industrial_accident_employer(gross_pay, employee.business)
         if employee.is_long_term_contract:
             total += calculate_employment_insurance_employer(gross_pay)
         return total
@@ -61,7 +62,7 @@ def calculate_employer_insurance_total(employee, gross_pay: int) -> int:
         health_insurance = calculate_health_insurance_employer(gross_pay)
         long_term_care = calculate_long_term_care_employer(health_insurance)
         employment_insurance = calculate_employment_insurance_employer(gross_pay)
-        industrial_accident = calculate_industrial_accident_employer(gross_pay)
+        industrial_accident = calculate_industrial_accident_employer(gross_pay, employee.business)
         return national_pension + health_insurance + long_term_care + employment_insurance + industrial_accident
 
     raise ValueError(f"알 수 없는 employment_type: {employee.employment_type}")
