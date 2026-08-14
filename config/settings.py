@@ -9,6 +9,12 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+PAYROLL_ENCRYPTION_KEY = os.environ.get("PAYROLL_ENCRYPTION_KEY")
 
 from pathlib import Path
 
@@ -20,6 +26,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = 'django-insecure-mv!r_=qx#)xin-zqnvzy25+!mjhbwhqos059+j88x7-joj(i3^'
 SECRET_KEY = 'django-insecure-5l()ew9)0in=29ppj$m^uge_+eppw8mtzgkkhb0!g%fkki12ju'
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -38,6 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'payroll',
     'businesses',
 ]
 
@@ -128,3 +136,4 @@ CODEF_MODE = "mock"
 REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "businesses.exceptions.custom_exception_handler",
 }
+
