@@ -85,6 +85,7 @@ def get_payslip_data(payment) -> dict:
     net_pay = payment.gross_pay - deductions_total
 
     return {
+        "employee_id": employee.id,
         "employee_name": employee.name,
         "employment_type": employee.employment_type,
         "year": payment.year,

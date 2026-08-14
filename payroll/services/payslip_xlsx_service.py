@@ -13,6 +13,7 @@ from openpyxl.utils import get_column_letter
 from payroll.services.payment_service import get_payslip_data
 
 _HEADERS = [
+    ("사원번호", "employee_id"),
     ("직원명", "employee_name"),
     ("고용형태", "employment_type"),
     ("근무시간", "work_hours"),

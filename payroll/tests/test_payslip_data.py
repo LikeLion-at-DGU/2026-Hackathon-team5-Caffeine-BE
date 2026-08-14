@@ -32,6 +32,7 @@ class PayslipDataTests(TestCase):
         )
         data = get_payslip_data(payment)
 
+        self.assertEqual(data["employee_id"], employee.id)
         self.assertEqual(data["income_tax"], 7_940)
         self.assertEqual(data["local_income_tax"], 794)
         self.assertGreater(data["national_pension"], 0)

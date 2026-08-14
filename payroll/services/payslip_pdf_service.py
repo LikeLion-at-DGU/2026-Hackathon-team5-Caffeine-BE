@@ -54,6 +54,8 @@ def _draw_payslip_page(c: canvas.Canvas, payment) -> None:
     c.setFont(FONT_NAME, 11)
     c.drawString(x_margin, y, f"성명: {data['employee_name']}")
     y -= 7 * mm
+    c.drawString(x_margin, y, f"사원번호: {data['employee_id']:04d}")
+    y -= 7 * mm
     c.drawString(x_margin, y, f"귀속연월: {data['year']}년 {data['month']}월")
     y -= 7 * mm
     c.drawString(x_margin, y, f"지급일: {date.today().isoformat()}")
