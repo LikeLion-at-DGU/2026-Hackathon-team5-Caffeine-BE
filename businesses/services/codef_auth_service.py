@@ -1,6 +1,7 @@
 from businesses.models import CodefConnection
 from integrations.codef.factory import get_codef_provider
 
+ALL_CONNECTION_TYPES = ["CARD", "HOMETAX"]
 
 def _reset_two_way(conn):
     """2-way 인증에 사용한 임시 정보를 초기화한다."""
@@ -60,4 +61,22 @@ class CodefAuthService:
         return {
             "type": connection_type,
             "status": conn.status,
+        }
+        
+    def status(self, business):
+    # 연결 이력이 없어도 CARD/HOMETAX 상태를 모두 반환한다.
+        existing = {
+            c.connection_type: c.status
+            for c in CodefConnection.objects.filter(business=business)
+        }
+
+        return {
+            "business_id": business.id,
+            "connections": [
+                {
+                    "type": t,
+                    "status": existing.get(t, "DISCONNECTED"),
+                }
+                for t in ALL_CONNECTION_TYPES
+            ],
         }

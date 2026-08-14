@@ -61,3 +61,22 @@ class CodefAuthTests(APITestCase):
         self.assertEqual(conn.status, "AUTH_REQUIRED")
         self.assertEqual(conn.last_error_code, "")
         self.assertEqual(conn.last_error_message, "")
+        
+    def test_status_always_shows_both_types_with_disconnected_default(self):
+        # 아직 아무 인증도 안 한 상태에서도 CARD/HOMETAX 둘 다 응답에 나와야 함
+        url = reverse("business-codef-auth-status", kwargs={"pk": self.business.id})
+        res = self.client.get(url)
+        types = {c["type"]: c["status"] for c in res.data["connections"]}
+        self.assertEqual(types, {"CARD": "DISCONNECTED", "HOMETAX": "DISCONNECTED"})
+
+    def test_status_shows_both_connections_after_auth(self):
+        self.client.post(reverse("business-codef-auth", kwargs={"pk": self.business.id}),
+                            {"connection_type": "HOMETAX"}, format="json")
+        self.client.post(reverse("business-codef-auth", kwargs={"pk": self.business.id}),
+                            {"connection_type": "CARD"}, format="json")
+
+        url = reverse("business-codef-auth-status", kwargs={"pk": self.business.id})
+        res = self.client.get(url)
+        types = {c["type"]: c["status"] for c in res.data["connections"]}
+        self.assertEqual(types["CARD"], "CONNECTED")
+        self.assertEqual(types["HOMETAX"], "AUTH_REQUIRED")

@@ -82,3 +82,17 @@ class BusinessViewSet(
         )
 
         return Response(result, status=200)
+    
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="codef-auth/status",
+        url_name="codef-auth-status",
+    )
+    def codef_auth_status(self, request, pk=None):
+        business = self.get_object()
+
+        # CARD/HOMETAX의 현재 CODEF 연결 상태를 조회한다.
+        result = CodefAuthService().status(business)
+
+        return Response(result, status=200)    
