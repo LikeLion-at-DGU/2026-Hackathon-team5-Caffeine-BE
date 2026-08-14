@@ -4,10 +4,19 @@ from .models import Business, TaxTypeHistory, CodefConnection
 
 
 class BusinessSerializer(serializers.ModelSerializer):
+    business_id = serializers.IntegerField(
+        source="id",
+        read_only=True,
+    )
+    tax_type_changed_at = serializers.DateField(
+        source="tax_type_changed_date",
+        read_only=True,
+    )
+
     class Meta:
         model = Business
         fields = [
-            "id",
+            "business_id",
             "business_name",
             "business_number",
             "industry_code",
@@ -16,17 +25,15 @@ class BusinessSerializer(serializers.ModelSerializer):
             "business_status",
             "tax_type",
             "tax_type_code",
-            "tax_type_changed_date",
+            "tax_type_changed_at",
             "is_demo",
         ]
 
-        # CODEF 또는 서버에서 관리하는 값은 사용자가 직접 수정하지 못하도록 설정
+        # CODEF 또는 서버에서 관리하는 필드는 수정 불가
         read_only_fields = [
-            "id",
             "business_status",
             "tax_type",
             "tax_type_code",
-            "tax_type_changed_date",
             "is_demo",
         ]
 
@@ -34,8 +41,6 @@ class BusinessSerializer(serializers.ModelSerializer):
 class TaxTypeHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = TaxTypeHistory
-
-        # 사업장 정보는 URL로 식별되므로 변경 이력만 반환
         fields = [
             "id",
             "before_code",
@@ -44,9 +49,10 @@ class TaxTypeHistorySerializer(serializers.ModelSerializer):
             "source",
             "created_at",
         ]
-        
+
+
 class CodefAuthRequestSerializer(serializers.Serializer):
-    # 모델에 정의된 연결 유형(CARD/HOMETAX)만 허용한다.
+    # CARD / HOMETAX만 허용
     connection_type = serializers.ChoiceField(
         choices=[c[0] for c in CodefConnection.CONNECTION_TYPES]
     )
