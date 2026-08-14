@@ -1,0 +1,14 @@
+{
+  "result": {
+    "code": "MOCK-AUTH-REQUIRED",
+    "message": "mock 2-way authentication required"
+  },
+  "data": {
+    "continue2Way": true,
+    "method": "simpleAuth",
+    "jobIndex": 0,
+    "threadIndex": 0,
+    "jti": "mock-jti-001",
+    "twoWayTimestamp": 1786500000000
+  }
+}

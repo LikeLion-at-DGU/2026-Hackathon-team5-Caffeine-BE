@@ -4,7 +4,12 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from .models import Business
-from .serializers import BusinessSerializer, TaxTypeHistorySerializer
+from .serializers import (
+    BusinessSerializer,
+    CodefAuthRequestSerializer,
+    TaxTypeHistorySerializer,
+)
+from .services.codef_auth_service import CodefAuthService
 from .services.tax_type_service import CodefResponseError, TaxTypeService
 
 
@@ -13,9 +18,9 @@ class BusinessViewSet(
     mixins.UpdateModelMixin,
     GenericViewSet,
 ):
-    """사업장 정보 조회/수정 및 과세유형 관련 API."""
+    """사업장 정보 조회/수정 및 CODEF 연동 API."""
 
-    # 기본 조회/수정과 @action 기반 API를 허용
+    # 기본 조회/수정과 @action 기반 API를 허용한다.
     http_method_names = ["get", "post", "patch", "head", "options"]
 
     queryset = Business.objects.all()
@@ -30,7 +35,7 @@ class BusinessViewSet(
     def tax_type_history(self, request, pk=None):
         business = self.get_object()
 
-        # 모델의 기본 정렬에 따라 최신 변경 이력부터 조회
+        # 최신 과세유형 변경 이력부터 조회한다.
         histories = business.tax_type_histories.all()
 
         return Response(
@@ -49,10 +54,31 @@ class BusinessViewSet(
         try:
             result = TaxTypeService().sync(business)
         except CodefResponseError as e:
-            # 외부 CODEF 응답 처리 실패는 502로 반환
+            # CODEF 응답 처리 실패는 502로 반환한다.
             return Response(
                 {"error": str(e)},
                 status=502,
             )
+
+        return Response(result, status=200)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="codef-auth",
+        url_name="codef-auth",
+    )
+    def codef_auth(self, request, pk=None):
+        business = self.get_object()
+
+        # 요청한 연결 유형(CARD/HOMETAX)을 검증한다.
+        serializer = CodefAuthRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # CODEF 연결 요청을 Service에 위임한다.
+        result = CodefAuthService().request(
+            business,
+            serializer.validated_data["connection_type"],
+        )
 
         return Response(result, status=200)

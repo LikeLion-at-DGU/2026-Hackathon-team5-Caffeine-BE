@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Business, TaxTypeHistory
+from .models import Business, TaxTypeHistory, CodefConnection
 
 
 class BusinessSerializer(serializers.ModelSerializer):
@@ -44,3 +44,9 @@ class TaxTypeHistorySerializer(serializers.ModelSerializer):
             "source",
             "created_at",
         ]
+        
+class CodefAuthRequestSerializer(serializers.Serializer):
+    # 모델에 정의된 연결 유형(CARD/HOMETAX)만 허용한다.
+    connection_type = serializers.ChoiceField(
+        choices=[c[0] for c in CodefConnection.CONNECTION_TYPES]
+    )

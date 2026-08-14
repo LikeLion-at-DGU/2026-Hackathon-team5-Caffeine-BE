@@ -6,8 +6,9 @@ from .base import BaseCodefProvider
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
-# 사업자등록상태 조회 성공을 나타내는 Mock 전용 코드
+# Mock 응답 상태 코드
 _SUCCESS = "MOCK-00000"
+_AUTH_REQUIRED = "MOCK-AUTH-REQUIRED"
 
 
 def load_fixture(filename):
@@ -26,7 +27,6 @@ class MockCodefProvider(BaseCodefProvider):
         raw = load_fixture("business_status_success.json")
         code = raw.get("code", "")
 
-        # CODEF 형식의 Mock 데이터를 Service에서 사용할 공통 형식으로 변환한다.
         if code != _SUCCESS:
             return {
                 "outcome": "FAILURE",
@@ -40,13 +40,81 @@ class MockCodefProvider(BaseCodefProvider):
             "business_status": raw.get("resBusinessStatus", ""),
             "taxation_type_code": raw.get("resTaxationTypeCode", ""),
             "closing_date": raw.get("resClosingDate", ""),
-            "transfer_tax_type_date": raw.get("resTransferTaxTypeDate", ""),
+            "transfer_tax_type_date": raw.get(
+                "resTransferTaxTypeDate",
+                "",
+            ),
         }
 
     def request_auth(self, business, connection_type):
-        # CODEF 인증 요청 Mock은 이후 구현한다.
-        raise NotImplementedError
+        # 연결 유형에 맞는 Mock 응답을 공통 형식으로 변환해 반환한다.
+        if connection_type == "HOMETAX":
+            return self._normalize_hometax(
+                load_fixture("hometax_auth_required.json")
+            )
+
+        return self._normalize_card(
+            load_fixture("card_connected_success.json")
+        )
 
     def retry_auth(self, business, connection):
         # HOMETAX 2-way 인증 재시도 Mock은 이후 구현한다.
         raise NotImplementedError
+
+    @staticmethod
+    def _normalize_hometax(raw):
+        # CODEF 2-way 응답을 Service에서 사용할 공통 형식으로 변환한다.
+        code = raw.get("result", {}).get("code", "")
+        data = raw.get("data", {})
+
+        if code == _AUTH_REQUIRED:
+            return {
+                "outcome": "AUTH_REQUIRED",
+                "continue_2way": True,
+                "method": data.get("method", ""),
+                "job_index": data.get("jobIndex"),
+                "thread_index": data.get("threadIndex"),
+                "jti": data.get("jti", ""),
+                "two_way_timestamp": data.get("twoWayTimestamp"),
+            }
+
+        if code == _SUCCESS:
+            return {
+                "outcome": "SUCCESS",
+            }
+
+        return {
+            "outcome": "FAILURE",
+            "error_code": code,
+            "error_message": raw.get("result", {}).get("message", ""),
+        }
+
+    @staticmethod
+    def _normalize_card(raw):
+        # CODEF 계정 등록 응답을 Service에서 사용할 공통 형식으로 변환한다.
+        code = raw.get("result", {}).get("code", "")
+
+        if code != _SUCCESS:
+            return {
+                "outcome": "FAILURE",
+                "error_code": code,
+                "error_message": raw.get("result", {}).get(
+                    "message",
+                    "",
+                ),
+            }
+
+        connected_id = raw.get("data", {}).get("connectedId", "")
+
+        # 성공 응답이라도 Connected ID가 없으면 연결 실패로 처리한다.
+        if not connected_id:
+            return {
+                "outcome": "FAILURE",
+                "error_code": "EMPTY_CONNECTED_ID",
+                "error_message": "connectedId가 비어 있습니다.",
+            }
+
+        return {
+            "outcome": "SUCCESS",
+            "connected_id": connected_id,
+        }
