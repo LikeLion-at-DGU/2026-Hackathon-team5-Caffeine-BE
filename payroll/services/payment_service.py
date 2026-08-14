@@ -1,10 +1,13 @@
-from payroll.exceptions import PayrollAlreadyExists, PaymentNotFound, WithholdingCalculationNotReady
+from payroll.exceptions import PayrollAlreadyExists, PaymentNotFound
 from payroll.models import Employee, Payment
 from payroll.services import employee_service
-from payroll.services.withholding_tax_service import calculate_gross_pay, calculate_withholding_tax
-from payroll.services.employer_insurance_service import calculate_employer_insurance_total
 from payroll.services.employee_insurance_service import calculate_employee_insurance_breakdown
-from payroll.services.withholding_tax_service import calculate_withholding_breakdown
+from payroll.services.employer_insurance_service import calculate_employer_insurance_total
+from payroll.services.withholding_tax_service import (
+    calculate_gross_pay,
+    calculate_withholding_breakdown,
+    calculate_withholding_tax,
+)
 
 
 def _calculate_and_build(employee: Employee, year: int, month: int, work_hours) -> dict:
@@ -20,8 +23,8 @@ def _calculate_and_build(employee: Employee, year: int, month: int, work_hours) 
     }
 
 
-def create_payment(employee_id: int, year: int, month: int, work_hours) -> Payment:
-    employee = employee_service.get_employee(employee_id)  # 없으면 EmployeeNotFound 발생
+def create_payment(business_id: int, employee_id: int, year: int, month: int, work_hours) -> Payment:
+    employee = employee_service.get_employee(business_id, employee_id)  # 없으면 EmployeeNotFound 발생
 
     if Payment.objects.filter(employee=employee, year=year, month=month).exists():
         raise PayrollAlreadyExists()
@@ -31,8 +34,8 @@ def create_payment(employee_id: int, year: int, month: int, work_hours) -> Payme
     return payment
 
 
-def update_payment(payment_id: int, work_hours) -> Payment:
-    payment = get_payment(payment_id)
+def update_payment(business_id: int, payment_id: int, work_hours) -> Payment:
+    payment = get_payment(business_id, payment_id)
     data = _calculate_and_build(payment.employee, payment.year, payment.month, work_hours)
 
     payment.work_hours = data["work_hours"]
@@ -42,15 +45,15 @@ def update_payment(payment_id: int, work_hours) -> Payment:
     return payment
 
 
-def get_payment(payment_id: int) -> Payment:
+def get_payment(business_id: int, payment_id: int) -> Payment:
     try:
-        return Payment.objects.get(id=payment_id)
+        return Payment.objects.get(id=payment_id, employee__business_id=business_id)
     except Payment.DoesNotExist:
         raise PaymentNotFound()
 
 
-def list_payments(year: int | None = None, month: int | None = None):
-    qs = Payment.objects.select_related("employee").order_by("employee_id")
+def list_payments(business_id: int, year: int | None = None, month: int | None = None):
+    qs = Payment.objects.filter(employee__business_id=business_id).select_related("employee").order_by("employee_id")
     if year is not None:
         qs = qs.filter(year=year)
     if month is not None:
@@ -58,9 +61,8 @@ def list_payments(year: int | None = None, month: int | None = None):
     return qs
 
 
-def get_monthly_summary(year: int, month: int) -> dict:
-    payments = list_payments(year=year, month=month)
-
+def get_monthly_summary(business_id: int, year: int, month: int) -> dict:
+    payments = list_payments(business_id, year=year, month=month)
     total_labor_cost = 0
     total_withholding_tax = 0
     for payment in payments:

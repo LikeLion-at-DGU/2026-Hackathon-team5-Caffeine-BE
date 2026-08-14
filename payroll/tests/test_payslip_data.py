@@ -1,3 +1,4 @@
+from businesses.models import Business
 from django.test import TestCase
 
 from payroll.models import Employee, Payment
@@ -5,9 +6,12 @@ from payroll.services.payment_service import get_payslip_data
 
 
 class PayslipDataTests(TestCase):
+    def setUp(self):
+        self.business = Business.objects.create(business_name="카페비서")
+
     def test_freelancer_payslip_has_only_income_tax_deduction(self):
         employee = Employee.objects.create(
-            name="김프리", employment_type="FREELANCER", hourly_wage=15000
+            business=self.business, name="김프리", employment_type="FREELANCER", hourly_wage=15000
         )
         payment = Payment.objects.create(
             employee=employee, year=2026, month=8,
@@ -15,6 +19,7 @@ class PayslipDataTests(TestCase):
         )
         data = get_payslip_data(payment)
 
+        self.assertEqual(data["employee_id"], employee.id)
         self.assertEqual(data["income_tax"], 36_000)
         self.assertEqual(data["local_income_tax"], 3_600)
         self.assertEqual(data["national_pension"], 0)
@@ -24,7 +29,7 @@ class PayslipDataTests(TestCase):
 
     def test_full_time_payslip_has_all_deductions(self):
         employee = Employee.objects.create(
-            name="장예은", employment_type="FULL_TIME", hourly_wage=10320
+            business=self.business, name="장예은", employment_type="FULL_TIME", hourly_wage=10320
         )
         payment = Payment.objects.create(
             employee=employee, year=2026, month=8,
@@ -32,7 +37,6 @@ class PayslipDataTests(TestCase):
         )
         data = get_payslip_data(payment)
 
-        self.assertEqual(data["employee_id"], employee.id)
         self.assertEqual(data["income_tax"], 7_940)
         self.assertEqual(data["local_income_tax"], 794)
         self.assertGreater(data["national_pension"], 0)
@@ -49,7 +53,7 @@ class PayslipDataTests(TestCase):
 
     def test_part_time_without_start_date_has_minimal_deductions(self):
         employee = Employee.objects.create(
-            name="황사라", employment_type="PART_TIME", hourly_wage=10320
+            business=self.business, name="황사라", employment_type="PART_TIME", hourly_wage=10320
         )
         payment = Payment.objects.create(
             employee=employee, year=2026, month=8,
@@ -57,7 +61,5 @@ class PayslipDataTests(TestCase):
         )
         data = get_payslip_data(payment)
 
-        # 770,000원 미만이라 원천세 0원 + 근속 3개월 미만이라 4대보험도 0원
         self.assertEqual(data["deductions_total"], 0)
         self.assertEqual(data["net_pay"], 445_824)
-        
