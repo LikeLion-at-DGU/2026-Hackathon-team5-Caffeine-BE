@@ -17,6 +17,7 @@ class Employee(models.Model):
         max_digits=6, decimal_places=1, null=True, blank=True
     )
     work_started_at = models.DateField(null=True, blank=True)
+    is_long_term_contract = models.BooleanField(default=False)
     rrn_front_encrypted = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

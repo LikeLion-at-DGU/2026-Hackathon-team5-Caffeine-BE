@@ -17,8 +17,6 @@ from payroll.services.insurance_common import (
     NATIONAL_PENSION_CAP,
     NATIONAL_PENSION_FLOOR,
     NATIONAL_PENSION_RATE,
-    has_worked_three_months_or_more,
-    period_end_date,
 )
 EMPLOYMENT_INSURANCE_EMPLOYEE_RATE = 0.009  # 실업급여분만 (고용안정·직업능력개발사업 제외)
 
@@ -40,16 +38,13 @@ def calculate_employment_insurance_employee(gross_pay: int) -> int:
     return round(gross_pay * EMPLOYMENT_INSURANCE_EMPLOYEE_RATE)
 
 
-def calculate_employee_insurance_breakdown(employee, gross_pay: int, period_year: int, period_month: int) -> dict:
+def calculate_employee_insurance_breakdown(employee, gross_pay: int) -> dict:
     """근로자 부담 4대보험료를 항목별로 분리해서 반환 (임금명세서 공제 항목용)."""
     if employee.employment_type == "FREELANCER":
         return {"national_pension": 0, "health_insurance": 0, "long_term_care": 0, "employment_insurance": 0, "total": 0}
 
     if employee.employment_type == "PART_TIME":
-        employment_insurance = 0
-        reference_date = period_end_date(period_year, period_month)
-        if has_worked_three_months_or_more(employee.work_started_at, reference_date):
-            employment_insurance = calculate_employment_insurance_employee(gross_pay)
+        employment_insurance = calculate_employment_insurance_employee(gross_pay) if employee.is_long_term_contract else 0
         return {
             "national_pension": 0, "health_insurance": 0, "long_term_care": 0,
             "employment_insurance": employment_insurance, "total": employment_insurance,

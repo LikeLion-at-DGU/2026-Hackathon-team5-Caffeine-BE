@@ -65,9 +65,7 @@ def get_monthly_summary(year: int, month: int) -> dict:
     total_withholding_tax = 0
     for payment in payments:
         total_labor_cost += payment.gross_pay
-        total_labor_cost += calculate_employer_insurance_total(
-            payment.employee, payment.gross_pay, year, month
-        )
+        total_labor_cost += calculate_employer_insurance_total(payment.employee, payment.gross_pay)
         total_withholding_tax += payment.withholding_tax
 
     return {
@@ -81,9 +79,7 @@ def get_payslip_data(payment) -> dict:
     """임금명세서/지급명세서에 필요한 전체 데이터 (소득세/지방소득세/4대보험 항목별 분리 + 실수령액)."""
     employee = payment.employee
     breakdown = calculate_withholding_breakdown(employee.employment_type, payment.gross_pay)
-    insurance = calculate_employee_insurance_breakdown(
-        employee, payment.gross_pay, payment.year, payment.month
-    )
+    insurance = calculate_employee_insurance_breakdown(employee, payment.gross_pay)
 
     deductions_total = breakdown["total"] + insurance["total"]
     net_pay = payment.gross_pay - deductions_total
