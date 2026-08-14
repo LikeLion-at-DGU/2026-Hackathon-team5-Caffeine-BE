@@ -1,0 +1,9 @@
+{
+  "result": {
+    "code": "MOCK-00000",
+    "message": "mock card connected"
+  },
+  "data": {
+    "connectedId": "mock-connected-id-0001"
+  }
+}
