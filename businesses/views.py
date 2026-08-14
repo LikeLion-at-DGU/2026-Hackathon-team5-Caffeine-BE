@@ -9,7 +9,10 @@ from .serializers import (
     CodefAuthRequestSerializer,
     TaxTypeHistorySerializer,
 )
-from .services.codef_auth_service import CodefAuthService
+from .services.codef_auth_service import (
+    CodefAuthService,
+    InvalidAuthRequestError,
+)
 from .services.tax_type_service import CodefResponseError, TaxTypeService
 
 
@@ -82,7 +85,7 @@ class BusinessViewSet(
         )
 
         return Response(result, status=200)
-    
+
     @action(
         detail=True,
         methods=["get"],
@@ -95,4 +98,32 @@ class BusinessViewSet(
         # CARD/HOMETAX의 현재 CODEF 연결 상태를 조회한다.
         result = CodefAuthService().status(business)
 
-        return Response(result, status=200)    
+        return Response(result, status=200)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="codef-auth/retry",
+        url_name="codef-auth-retry",
+    )
+    def codef_auth_retry(self, request, pk=None):
+        business = self.get_object()
+
+        # 재시도할 연결 유형을 검증한다.
+        serializer = CodefAuthRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            # HOMETAX 2-way 인증 재시도를 Service에 위임한다.
+            result = CodefAuthService().retry(
+                business,
+                serializer.validated_data["connection_type"],
+            )
+        except InvalidAuthRequestError as e:
+            # 허용되지 않는 재시도 요청은 400으로 반환한다.
+            return Response(
+                {"error": str(e)},
+                status=400,
+            )
+
+        return Response(result, status=200)

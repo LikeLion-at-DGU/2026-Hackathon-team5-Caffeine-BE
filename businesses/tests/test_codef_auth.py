@@ -80,3 +80,52 @@ class CodefAuthTests(APITestCase):
         types = {c["type"]: c["status"] for c in res.data["connections"]}
         self.assertEqual(types["CARD"], "CONNECTED")
         self.assertEqual(types["HOMETAX"], "AUTH_REQUIRED")
+    
+    def test_retry_moves_to_connected(self):
+        self.client.post(reverse("business-codef-auth", kwargs={"pk": self.business.id}),
+                          {"connection_type": "HOMETAX"}, format="json")
+        url = reverse("business-codef-auth-retry", kwargs={"pk": self.business.id})
+        res = self.client.post(url, {"connection_type": "HOMETAX"}, format="json")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["status"], "CONNECTED")
+
+        # 연결되고 나면 2-way 임시 데이터는 정리돼야 함
+        conn = CodefConnection.objects.get(business=self.business, connection_type="HOMETAX")
+        self.assertFalse(conn.continue_2way)
+        self.assertEqual(conn.jti, "")
+
+    def test_retry_on_card_is_rejected(self):
+        self.client.post(reverse("business-codef-auth", kwargs={"pk": self.business.id}),
+                          {"connection_type": "CARD"}, format="json")
+        url = reverse("business-codef-auth-retry", kwargs={"pk": self.business.id})
+        res = self.client.post(url, {"connection_type": "CARD"}, format="json")
+        self.assertEqual(res.status_code, 400)
+
+    def test_retry_without_auth_required_is_rejected(self):
+        # 아직 아무 요청도 안 한(DISCONNECTED) 상태에서 재시도하면 400
+        url = reverse("business-codef-auth-retry", kwargs={"pk": self.business.id})
+        res = self.client.post(url, {"connection_type": "HOMETAX"}, format="json")
+        self.assertEqual(res.status_code, 400)
+
+    def test_failure_resets_stale_two_way_data(self):
+        business = self.business
+        self.client.post(reverse("business-codef-auth", kwargs={"pk": business.id}),
+                          {"connection_type": "HOMETAX"}, format="json")
+        conn = CodefConnection.objects.get(business=business, connection_type="HOMETAX")
+        self.assertTrue(conn.continue_2way)
+        self.assertNotEqual(conn.jti, "")
+
+        fail_result = {"outcome": "FAILURE", "error_code": "CF-99999", "error_message": "generic error"}
+        url = reverse("business-codef-auth-retry", kwargs={"pk": business.id})
+        with patch("businesses.services.codef_auth_service.get_codef_provider") as mock_factory:
+            mock_factory.return_value.retry_auth.return_value = fail_result
+            res = self.client.post(url, {"connection_type": "HOMETAX"}, format="json")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["status"], "FAILED")
+        conn.refresh_from_db()
+        self.assertEqual(conn.status, "FAILED")
+        self.assertEqual(conn.last_error_code, "CF-99999")
+        self.assertFalse(conn.continue_2way)
+        self.assertEqual(conn.jti, "")
+        self.assertIsNone(conn.job_index)

@@ -58,8 +58,10 @@ class MockCodefProvider(BaseCodefProvider):
         )
 
     def retry_auth(self, business, connection):
-        # HOMETAX 2-way 인증 재시도 Mock은 이후 구현한다.
-        raise NotImplementedError
+        # HOMETAX 2-way 인증 재시도 성공 상황을 가정한 Mock 응답
+        return self._normalize_hometax(
+            load_fixture("hometax_auth_success.json")
+        )
 
     @staticmethod
     def _normalize_hometax(raw):
@@ -86,7 +88,10 @@ class MockCodefProvider(BaseCodefProvider):
         return {
             "outcome": "FAILURE",
             "error_code": code,
-            "error_message": raw.get("result", {}).get("message", ""),
+            "error_message": raw.get("result", {}).get(
+                "message",
+                "",
+            ),
         }
 
     @staticmethod

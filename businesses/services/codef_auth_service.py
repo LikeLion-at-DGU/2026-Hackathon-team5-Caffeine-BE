@@ -1,7 +1,13 @@
 from businesses.models import CodefConnection
 from integrations.codef.factory import get_codef_provider
 
+
 ALL_CONNECTION_TYPES = ["CARD", "HOMETAX"]
+
+
+class InvalidAuthRequestError(Exception):
+    """현재 인증 상태에서 허용되지 않는 요청일 때 발생하는 예외."""
+
 
 def _reset_two_way(conn):
     """2-way 인증에 사용한 임시 정보를 초기화한다."""
@@ -30,8 +36,6 @@ class CodefAuthService:
             conn.status = "FAILED"
             conn.last_error_code = result.get("error_code", "")
             conn.last_error_message = result.get("error_message", "")
-
-            # 실패한 인증의 2-way 임시 정보를 제거한다.
             _reset_two_way(conn)
 
         elif (
@@ -62,9 +66,61 @@ class CodefAuthService:
             "type": connection_type,
             "status": conn.status,
         }
-        
+
+    def retry(self, business, connection_type):
+        # 재시도는 추가인증이 필요한 HOMETAX 연결에서만 허용한다.
+        if connection_type != "HOMETAX":
+            raise InvalidAuthRequestError(
+                "재시도는 HOMETAX 연결에만 사용할 수 있습니다."
+            )
+
+        conn = self._get_connection(business, connection_type)
+
+        if conn.status != "AUTH_REQUIRED":
+            raise InvalidAuthRequestError(
+                f"AUTH_REQUIRED 상태에서만 재시도할 수 있습니다 "
+                f"(현재: {conn.status})."
+            )
+
+        provider = get_codef_provider()
+        result = provider.retry_auth(business, conn)
+
+        if result["outcome"] == "SUCCESS":
+            conn.status = "CONNECTED"
+            conn.last_error_code = ""
+            conn.last_error_message = ""
+            _reset_two_way(conn)
+
+        elif result["outcome"] == "AUTH_REQUIRED":
+            # 추가인증이 계속 필요한 경우 갱신된 2-way 정보를 반영한다.
+            conn.status = "AUTH_REQUIRED"
+            conn.continue_2way = True
+
+            if result.get("job_index") is not None:
+                conn.job_index = result["job_index"]
+
+            if result.get("thread_index") is not None:
+                conn.thread_index = result["thread_index"]
+
+            if result.get("jti"):
+                conn.jti = result["jti"]
+
+        else:
+            # 재시도 실패 시 2-way 임시 정보를 정리한다.
+            conn.status = "FAILED"
+            conn.last_error_code = result.get("error_code", "")
+            conn.last_error_message = result.get("error_message", "")
+            _reset_two_way(conn)
+
+        conn.save()
+
+        return {
+            "type": connection_type,
+            "status": conn.status,
+        }
+
     def status(self, business):
-    # 연결 이력이 없어도 CARD/HOMETAX 상태를 모두 반환한다.
+        # 연결 이력이 없는 유형도 DISCONNECTED 상태로 포함한다.
         existing = {
             c.connection_type: c.status
             for c in CodefConnection.objects.filter(business=business)
@@ -74,9 +130,12 @@ class CodefAuthService:
             "business_id": business.id,
             "connections": [
                 {
-                    "type": t,
-                    "status": existing.get(t, "DISCONNECTED"),
+                    "type": connection_type,
+                    "status": existing.get(
+                        connection_type,
+                        "DISCONNECTED",
+                    ),
                 }
-                for t in ALL_CONNECTION_TYPES
+                for connection_type in ALL_CONNECTION_TYPES
             ],
         }
