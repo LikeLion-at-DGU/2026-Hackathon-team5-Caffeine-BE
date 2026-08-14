@@ -23,13 +23,13 @@ class EmployerInsuranceTests(SimpleTestCase):
         # 계약이 3개월 미만(is_long_term_contract=False)이면 고용보험 미적용
         employee = _make_employee("PART_TIME", is_long_term_contract=False)
         result = calculate_employer_insurance_total(employee, 445_824)
-        self.assertEqual(result, round(445_824 * 0.008))
+        self.assertEqual(result, round(445_824 * 0.0086))
 
     def test_part_time_long_term_includes_employment_insurance(self):
         # 계약이 3개월 이상/무기한(is_long_term_contract=True)이면 첫 달부터 고용보험 적용
         employee = _make_employee("PART_TIME", is_long_term_contract=True)
         result = calculate_employer_insurance_total(employee, 445_824)
-        expected = round(445_824 * 0.008) + round(445_824 * 0.0115)
+        expected = round(445_824 * 0.0086) + round(445_824 * 0.0115)
         self.assertEqual(result, expected)
 
     def test_full_time_sums_all_five_items(self):
@@ -37,7 +37,8 @@ class EmployerInsuranceTests(SimpleTestCase):
         gross_pay = 1_455_120
         result = calculate_employer_insurance_total(employee, gross_pay)
         self.assertGreater(result, 0)
-        self.assertAlmostEqual(result, round(gross_pay * 0.1077), delta=500)
+        # 사업주 부담률 총합: 국민연금4.75+건강3.595+장기요양0.4724+고용1.15+산재0.86 ≈ 10.83%
+        self.assertAlmostEqual(result, round(gross_pay * 0.1083), delta=500)
 
     def test_national_pension_cap_applies_above_ceiling(self):
         # 2026-07-01~2027-06-30 기준 상한액 6,590,000원

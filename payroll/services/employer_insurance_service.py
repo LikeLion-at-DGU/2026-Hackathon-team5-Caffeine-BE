@@ -4,6 +4,7 @@
 """
 
 from payroll.services.insurance_common import (
+    COMMUTE_ACCIDENT_RATE,
     HEALTH_INSURANCE_RATE,
     INDUSTRIAL_ACCIDENT_RATE,
     LONG_TERM_CARE_RATE,
@@ -33,7 +34,8 @@ def calculate_employment_insurance_employer(gross_pay: int) -> int:
 
 
 def calculate_industrial_accident_employer(gross_pay: int) -> int:
-    return round(gross_pay * INDUSTRIAL_ACCIDENT_RATE)
+    """사업종류별 산재보험료율 + 전 업종 공통 출퇴근재해요율."""
+    return round(gross_pay * (INDUSTRIAL_ACCIDENT_RATE + COMMUTE_ACCIDENT_RATE))
 
 
 def calculate_employer_insurance_total(employee, gross_pay: int) -> int:

@@ -57,8 +57,8 @@ class PayrollSummaryAPITests(TestCase):
         # 정직원(전체 5종) + 단시간(산재만 0.8%) + 프리랜서(0원) 정확히 검증
         full_time_insurance = round(1_455_120 * 0.0475) + round(1_455_120 * 0.03595) \
             + round(round(1_455_120 * 0.03595) * 0.1314) + round(1_455_120 * 0.0115) \
-            + round(1_455_120 * 0.008)
-        part_time_insurance = round(445_824 * 0.008)
+            + round(1_455_120 * 0.0086)
+        part_time_insurance = round(445_824 * 0.0086)
         freelancer_insurance = 0
         expected_total = gross_pay_sum + full_time_insurance + part_time_insurance + freelancer_insurance
 
