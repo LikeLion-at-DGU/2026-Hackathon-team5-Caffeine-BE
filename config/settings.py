@@ -16,7 +16,6 @@ load_dotenv()
 
 PAYROLL_ENCRYPTION_KEY = os.environ.get("PAYROLL_ENCRYPTION_KEY")
 
-
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -28,6 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-mv!r_=qx#)xin-zqnvzy25+!mjhbwhqos059+j88x7-joj(i3^'
+SECRET_KEY = 'django-insecure-5l()ew9)0in=29ppj$m^uge_+eppw8mtzgkkhb0!g%fkki12ju'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'payroll',
+    'businesses',
 ]
 
 MIDDLEWARE = [
@@ -131,3 +132,8 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CODEF_MODE = "mock"
+
+REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "businesses.exceptions.custom_exception_handler",
+}
+

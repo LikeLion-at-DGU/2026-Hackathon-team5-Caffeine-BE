@@ -1,0 +1,10 @@
+{
+    "code": "MOCK-00000",
+    "message": "mock success",
+    "extraMessage": null,
+    "resCompanyIdentityNo": "1234567890",
+    "resBusinessStatus": "계속사업자",
+    "resTaxationTypeCode": "1",
+    "resClosingDate": "",
+    "resTransferTaxTypeDate": "20260101"
+}
