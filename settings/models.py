@@ -31,3 +31,15 @@ class Subscription(models.Model):
 
     def __str__(self) -> str:
         return f"{self.business.business_name} - {self.plan_name} ({self.status})"
+
+
+class BusinessProfile(models.Model):
+    """businesses.Business에 아직 없는 필드(대표자명 등)를 settings 쪽에서 임시로 보관.
+    businesses 팀이 정식 필드를 추가하면, 그쪽으로 데이터 이관 후 이 모델은 폐기 예정.
+    """
+    business = models.OneToOneField(Business, on_delete=models.CASCADE, related_name="settings_profile")
+    representative_name = models.CharField(max_length=50, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"{self.business.business_name} 대표자: {self.representative_name}"
