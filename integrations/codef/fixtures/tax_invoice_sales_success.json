@@ -1,0 +1,68 @@
+{
+  "result": {
+    "code": "MOCK-00000",
+    "extraMessage": "",
+    "message": "mock success",
+    "transactionId": "mock-tax-invoice-sales-202608"
+  },
+  "data": {
+    "resSupplyValue": "120000",
+    "resReportingDate": "20260821",
+    "resSendDate": "20260821",
+
+    "resSupplierRegNumber": "1234567890",
+    "resSupplierEstablishNo": "0",
+    "resSupplierCompanyName": "카페비서",
+    "resSupplierName": "김지훈",
+    "resSupplierBusinessPlace": "서울특별시 중구 퇴계로 198",
+    "resSupplierBusinessTypes": "숙박 및 음식점업",
+    "resSupplierBusinessItems": "커피전문점",
+    "resEmail": "cafeassistant@example.com",
+
+    "resContractorRegNumber": "7312456789",
+    "resContractorEstablishNo": "0",
+    "resContractorCompanyName": "스튜디오 온",
+    "resContractorName": "이서진",
+    "resContractorBusinessPlace": "서울특별시 중구 충무로 42",
+    "resContractorBusinessTypes": "전문, 과학 및 기술 서비스업",
+    "resContractorBusinessItems": "디자인 및 광고물 제작",
+    "resEmail1": "studioon@example.com",
+    "resEmail2": "",
+
+    "resTotalAmount": "132000",
+    "resETaxInvoiceType": "",
+    "resNote": "회의용 단체 음료 주문",
+    "resReceiptOrCharge": "",
+    "resRepItems": "단체 음료",
+    "resImportDeclarationNo": "",
+    "commStartDate": "",
+    "commEndDate": "",
+    "resTotalCount": "1",
+    "resReasonModification": "",
+    "resCash": "",
+    "resCheck": "",
+    "resBankBill": "",
+    "resAccountReceivable": "",
+    "resIssueNm": "",
+    "resTaxAmt": "12000",
+    "resIssueDate": "20260821",
+    "resApprovalNo": "MOCK-20260821-S001",
+
+    "resTradeItemList": [
+      {
+        "resPurchaseExpiryDate": "20260821",
+        "resTaxItemName": "회의용 단체 음료",
+        "resStandards": "잔",
+        "resQuantity": "30",
+        "resUnitPrice": "4000",
+        "resSupplyValue": "120000",
+        "resTaxAmt": "12000",
+        "resNote": ""
+      }
+    ],
+
+    "resTotalPageCount": "1",
+    "commStartPageNo": "1",
+    "resEndPageNo": "1"
+  }
+}

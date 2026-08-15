@@ -1,0 +1,37 @@
+{
+  "result": {
+    "code": "MOCK-00000",
+    "extraMessage": "",
+    "message": "mock success",
+    "transactionId": "mock-credit-card-sales-2026-q3"
+  },
+  "data": {
+    "resSalesHistoryList": [
+      {
+        "resYearMonth": "202607",
+        "resCount": "612",
+        "resTotalAmount": "8340000",
+        "resPaymentAmt": "8340000",
+        "resPaymentAmt1": "0",
+        "resCashBack": "0"
+      },
+      {
+        "resYearMonth": "202608",
+        "resCount": "651",
+        "resTotalAmount": "9120000",
+        "resPaymentAmt": "9120000",
+        "resPaymentAmt1": "0",
+        "resCashBack": "0"
+      }
+    ],
+    "resTotalList": [
+      {
+        "resQuarter": "3",
+        "resType": "신용카드",
+        "resCount": "1263",
+        "resTotalAmount": "17460000"
+      }
+    ],
+    "resSalesHistoryList1": []
+  }
+}
