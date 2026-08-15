@@ -96,3 +96,31 @@ class TransactionServiceTests(TestCase):
         )
 
         self.assertEqual(DuplicateDetector().detect(cancelled), [])
+
+    def test_sale_and_purchase_are_not_duplicate_candidates(self):
+        self.ingestion.save(self.business, self.normalized())
+        sale, _ = self.ingestion.save(
+            self.business,
+            self.normalized(
+                source_type=Transaction.SourceType.TAX_INVOICE,
+                external_id="sale-001",
+                transaction_type=Transaction.TransactionType.SALE,
+            ),
+        )
+
+        self.assertEqual(DuplicateDetector().detect(sale), [])
+
+    def test_cancelled_candidate_is_excluded(self):
+        self.ingestion.save(
+            self.business,
+            self.normalized(cancel_status=Transaction.CancelStatus.CANCELLED),
+        )
+        invoice, _ = self.ingestion.save(
+            self.business,
+            self.normalized(
+                source_type=Transaction.SourceType.TAX_INVOICE,
+                external_id="invoice-001",
+            ),
+        )
+
+        self.assertEqual(DuplicateDetector().detect(invoice), [])

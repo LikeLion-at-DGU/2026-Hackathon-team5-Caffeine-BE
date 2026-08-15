@@ -17,3 +17,15 @@ class RealCodefProvider(BaseCodefProvider):
 
     def retry_auth(self, business, connection):
         raise NotImplementedError
+
+    def get_business_card_purchases(self, business, start_date, end_date):
+        raise NotImplementedError("실제 사업용 신용카드 매입 조회는 아직 구현되지 않았습니다.")
+
+    def get_cash_receipt_sales(self, business, start_date, end_date):
+        raise NotImplementedError("실제 현금영수증 매출 조회는 아직 구현되지 않았습니다.")
+
+    def get_tax_invoice_purchases(self, business, start_date, end_date):
+        raise NotImplementedError("실제 전자세금계산서 매입 조회는 아직 구현되지 않았습니다.")
+
+    def get_tax_invoice_sales(self, business, start_date, end_date):
+        raise NotImplementedError("실제 전자세금계산서 매출 조회는 아직 구현되지 않았습니다.")

@@ -1,8 +1,16 @@
+from django.db.models import Q
 from rest_framework import serializers
 
 from businesses.models import Business
 
 from .models import Transaction, TransactionDuplicate
+
+
+TRANSACTION_SYNC_SOURCE_CHOICES = [
+    (Transaction.SourceType.CARD_PURCHASE, Transaction.SourceType.CARD_PURCHASE.label),
+    (Transaction.SourceType.CASH_RECEIPT_SALE, Transaction.SourceType.CASH_RECEIPT_SALE.label),
+    (Transaction.SourceType.TAX_INVOICE, Transaction.SourceType.TAX_INVOICE.label),
+]
 
 
 class TransactionSyncRequestSerializer(serializers.Serializer):
@@ -13,7 +21,7 @@ class TransactionSyncRequestSerializer(serializers.Serializer):
     start_date = serializers.DateField()
     end_date = serializers.DateField()
     sources = serializers.ListField(
-        child=serializers.ChoiceField(choices=Transaction.SourceType.choices),
+        child=serializers.ChoiceField(choices=TRANSACTION_SYNC_SOURCE_CHOICES),
         allow_empty=False,
     )
 
@@ -67,18 +75,25 @@ class DuplicateListQuerySerializer(serializers.Serializer):
 
 
 class TransactionSerializer(serializers.ModelSerializer):
+    transaction_id = serializers.IntegerField(source="id", read_only=True)
     business_id = serializers.IntegerField()
+    source = serializers.SerializerMethodField()
+    date = serializers.DateField(source="transaction_date", read_only=True)
+    time = serializers.TimeField(source="transaction_time", read_only=True, allow_null=True)
+    category = serializers.SerializerMethodField()
+    duplicate = serializers.SerializerMethodField()
 
     class Meta:
         model = Transaction
         fields = [
-            "id",
+            "transaction_id",
             "business_id",
+            "source",
             "source_type",
             "external_id",
             "transaction_type",
-            "transaction_date",
-            "transaction_time",
+            "date",
+            "time",
             "merchant_name",
             "merchant_business_number",
             "supply_amount",
@@ -87,13 +102,38 @@ class TransactionSerializer(serializers.ModelSerializer):
             "approval_no",
             "cancel_status",
             "category",
-            "classification_source",
-            "classification_confidence",
-            "raw_data",
+            "duplicate",
             "created_at",
             "updated_at",
         ]
         read_only_fields = fields
+
+    @staticmethod
+    def get_source(obj):
+        return {
+            Transaction.SourceType.CARD_PURCHASE: "CARD",
+            Transaction.SourceType.CASH_RECEIPT_PURCHASE: "CASH_RECEIPT",
+            Transaction.SourceType.CASH_RECEIPT_SALE: "CASH_RECEIPT",
+            Transaction.SourceType.TAX_INVOICE: "TAX_INVOICE",
+        }.get(obj.source_type, obj.source_type)
+
+    @staticmethod
+    def get_category(obj):
+        confidence = obj.classification_confidence
+        return {
+            "code": obj.category,
+            "label": obj.get_category_display(),
+            "source": obj.classification_source,
+            "confidence": float(confidence) if confidence is not None else None,
+        }
+
+    @staticmethod
+    def get_duplicate(obj):
+        pending = TransactionDuplicate.objects.filter(
+            Q(primary_transaction=obj) | Q(suspected_transaction=obj),
+            status=TransactionDuplicate.Status.PENDING,
+        ).exists()
+        return {"is_suspected": pending}
 
 
 class TransactionCategoryUpdateSerializer(serializers.Serializer):

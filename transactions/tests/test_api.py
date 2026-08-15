@@ -66,8 +66,10 @@ class TransactionApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["data"]["id"], self.card.id)
+        self.assertEqual(response.data["data"]["transaction_id"], self.card.id)
         self.assertEqual(response.data["data"]["business_id"], self.business.id)
+        self.assertEqual(response.data["data"]["source"], "CARD")
+        self.assertNotIn("raw_data", response.data["data"])
 
     def test_category_patch_marks_source_as_user(self):
         self.card.classification_confidence = Decimal("0.8000")
@@ -95,8 +97,8 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         item = response.data["data"]["items"][0]
         self.assertEqual(item["id"], self.duplicate.id)
-        self.assertEqual(item["primary_transaction"]["id"], self.card.id)
-        self.assertEqual(item["suspected_transaction"]["id"], self.invoice.id)
+        self.assertEqual(item["primary_transaction"]["transaction_id"], self.card.id)
+        self.assertEqual(item["suspected_transaction"]["transaction_id"], self.invoice.id)
 
     def test_duplicate_patch_resolves_status(self):
         response = self.client.patch(

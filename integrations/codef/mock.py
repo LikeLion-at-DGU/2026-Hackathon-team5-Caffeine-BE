@@ -63,6 +63,18 @@ class MockCodefProvider(BaseCodefProvider):
             load_fixture("hometax_auth_success.json")
         )
 
+    def get_business_card_purchases(self, business, start_date, end_date):
+        return load_fixture("business_card_purchase_success.json")
+
+    def get_cash_receipt_sales(self, business, start_date, end_date):
+        return load_fixture("cash_receipt_sales_success.json")
+
+    def get_tax_invoice_purchases(self, business, start_date, end_date):
+        return load_fixture("tax_invoice_purchase_success.json")
+
+    def get_tax_invoice_sales(self, business, start_date, end_date):
+        return load_fixture("tax_invoice_sales_success.json")
+
     @staticmethod
     def _normalize_hometax(raw):
         # CODEF 2-way 응답을 Service에서 사용할 공통 형식으로 변환한다.

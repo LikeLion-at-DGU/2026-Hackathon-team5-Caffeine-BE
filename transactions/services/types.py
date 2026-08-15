@@ -20,4 +20,6 @@ class NormalizedTransaction:
     vat_amount: Decimal = Decimal("0")
     approval_no: str = ""
     cancel_status: str = "NORMAL"
+    owner_business_number: str = ""
+    classification_hints: tuple[str, ...] = ()
     raw_data: dict[str, Any] = field(default_factory=dict)

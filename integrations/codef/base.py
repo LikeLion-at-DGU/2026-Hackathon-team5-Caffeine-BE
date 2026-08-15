@@ -53,3 +53,23 @@ class BaseCodefProvider(ABC):
     def retry_auth(self, business, connection):
         """저장된 2-way 정보를 사용해 HOMETAX 인증을 재시도한다."""
         raise NotImplementedError
+
+    @abstractmethod
+    def get_business_card_purchases(self, business, start_date, end_date):
+        """사업용 신용카드 매입 원본 응답을 반환한다."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_cash_receipt_sales(self, business, start_date, end_date):
+        """현금영수증 매출 원본 응답을 반환한다."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_tax_invoice_purchases(self, business, start_date, end_date):
+        """전자세금계산서 매입 원본 응답을 반환한다."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_tax_invoice_sales(self, business, start_date, end_date):
+        """전자세금계산서 매출 원본 응답을 반환한다."""
+        raise NotImplementedError

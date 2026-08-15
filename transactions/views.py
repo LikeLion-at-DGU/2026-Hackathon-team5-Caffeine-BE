@@ -12,7 +12,10 @@ from .serializers import (
     TransactionDuplicateSerializer,
     TransactionListQuerySerializer,
     TransactionSerializer,
+    TransactionSyncRequestSerializer,
 )
+from .services.normalizers.helpers import TransactionNormalizationError
+from .services.sync_service import TransactionSourceMismatchError, TransactionSyncService
 
 
 def _paginated_data(queryset, serializer_class, *, page, page_size):
@@ -28,6 +31,46 @@ def _paginated_data(queryset, serializer_class, *, page, page_size):
             "total_pages": math.ceil(total_count / page_size),
         },
     }
+
+
+class TransactionSyncView(APIView):
+    def post(self, request):
+        serializer = TransactionSyncRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                code="INVALID_TRANSACTION_SYNC_REQUEST",
+                message="거래 동기화 요청이 올바르지 않습니다.",
+                errors=serializer.errors,
+            )
+
+        params = serializer.validated_data
+        try:
+            result = TransactionSyncService().sync(
+                business=params["business"],
+                start_date=params["start_date"],
+                end_date=params["end_date"],
+                sources=params["sources"],
+            )
+        except (TransactionNormalizationError, TransactionSourceMismatchError) as exc:
+            return error_response(
+                code="CODEF_TRANSACTION_DATA_ERROR",
+                message="CODEF 거래 데이터를 처리하지 못했습니다.",
+                errors={"detail": str(exc)},
+                status=502,
+            )
+        except NotImplementedError as exc:
+            return error_response(
+                code="CODEF_TRANSACTION_SOURCE_UNAVAILABLE",
+                message="현재 모드에서는 거래 데이터 소스를 사용할 수 없습니다.",
+                errors={"detail": str(exc)},
+                status=502,
+            )
+
+        return success_response(
+            code="TRANSACTION_SYNC_SUCCESS",
+            message="거래 데이터를 동기화했습니다.",
+            data=result,
+        )
 
 
 class TransactionListView(APIView):
@@ -74,7 +117,7 @@ class TransactionDetailView(APIView):
             )
         return success_response(
             code="TRANSACTION_DETAIL_SUCCESS",
-            message="거래 상세를 조회했습니다.",
+            message="거래 상세 정보를 조회했습니다.",
             data=TransactionSerializer(transaction).data,
         )
 

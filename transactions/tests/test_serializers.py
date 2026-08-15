@@ -21,7 +21,6 @@ class TransactionSerializerContractTests(TestCase):
                 "end_date": "2026-08-31",
                 "sources": [
                     Transaction.SourceType.CARD_PURCHASE,
-                    Transaction.SourceType.CASH_RECEIPT_PURCHASE,
                     Transaction.SourceType.CASH_RECEIPT_SALE,
                     Transaction.SourceType.TAX_INVOICE,
                 ],

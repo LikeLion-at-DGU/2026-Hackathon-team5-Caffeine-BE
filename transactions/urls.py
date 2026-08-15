@@ -6,10 +6,12 @@ from .views import (
     TransactionDuplicateListView,
     TransactionDuplicateResolutionView,
     TransactionListView,
+    TransactionSyncView,
 )
 
 
 urlpatterns = [
+    path("sync/", TransactionSyncView.as_view(), name="transaction-sync"),
     path("", TransactionListView.as_view(), name="transaction-list"),
     path("duplicates/", TransactionDuplicateListView.as_view(), name="transaction-duplicate-list"),
     path(
