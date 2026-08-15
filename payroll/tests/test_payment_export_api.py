@@ -1,15 +1,17 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from businesses.models import Business
 from payroll.models import Employee, Payment
 
 
 class PaymentExportAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.url = "/api/payroll/payments/export/"
+        self.business = Business.objects.create(business_name="카페비서")
+        self.url = f"/api/businesses/{self.business.id}/payroll/payments/export/"
         employee = Employee.objects.create(
-            name="장예은", employment_type="FULL_TIME", hourly_wage=10320
+            business=self.business, name="장예은", employment_type="FULL_TIME", hourly_wage=10320
         )
         Payment.objects.create(
             employee=employee, year=2026, month=8,
@@ -22,7 +24,6 @@ class PaymentExportAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertGreater(len(response.content), 0)
-        # PDF 파일은 항상 %PDF로 시작함
         self.assertTrue(response.content.startswith(b"%PDF"))
 
     def test_export_xlsx_returns_xlsx_file(self):
@@ -34,7 +35,6 @@ class PaymentExportAPITests(TestCase):
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
         self.assertGreater(len(response.content), 0)
-        # XLSX(zip 기반 포맷)는 항상 PK로 시작함
         self.assertTrue(response.content.startswith(b"PK"))
 
     def test_export_invalid_format_returns_400(self):

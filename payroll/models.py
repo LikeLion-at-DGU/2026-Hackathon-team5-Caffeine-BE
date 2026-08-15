@@ -1,5 +1,5 @@
 from django.db import models
-
+from businesses.models import Business
 from payroll.utils.encryption import encrypt_rrn_front, decrypt_rrn_front
 
 
@@ -10,6 +10,7 @@ class Employee(models.Model):
         ("FREELANCER", "3.3% 프리랜서"),
     ]
 
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="employees")
     name = models.CharField(max_length=50)
     employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_TYPE_CHOICES)
     hourly_wage = models.PositiveIntegerField()
