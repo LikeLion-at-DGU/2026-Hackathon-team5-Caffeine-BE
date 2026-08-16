@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
 
 
+class CodefBusinessAccessError(ValueError):
+    """요청한 사업장과 CODEF 조회 연결을 안전하게 매핑할 수 없을 때 발생한다."""
+
+
 class BaseCodefProvider(ABC):
     """CODEF 연동 Provider의 공통 인터페이스.
 
@@ -10,6 +14,11 @@ class BaseCodefProvider(ABC):
     MockProvider는 개발용 응답을 반환하고,
     RealProvider는 실제 CODEF 응답을 같은 형식으로 변환한다.
     """
+
+    @abstractmethod
+    def ensure_business_access(self, business, source_type):
+        """거래 소스 조회가 요청 Business 소유의 연결을 사용하는지 검증한다."""
+        raise NotImplementedError
 
     @abstractmethod
     def get_business_status(self, business_number):
@@ -52,4 +61,29 @@ class BaseCodefProvider(ABC):
     @abstractmethod
     def retry_auth(self, business, connection):
         """저장된 2-way 정보를 사용해 HOMETAX 인증을 재시도한다."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_business_card_purchases(self, business, start_date, end_date):
+        """사업용 신용카드 매입 원본 응답을 반환한다."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_cash_receipt_sales(self, business, start_date, end_date):
+        """현금영수증 매출 원본 응답을 반환한다."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_tax_invoice_purchases(self, business, start_date, end_date):
+        """전자세금계산서 매입 원본 응답을 반환한다."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_tax_invoice_sales(self, business, start_date, end_date):
+        """전자세금계산서 매출 원본 응답을 반환한다."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_credit_card_sales_summary(self, business, start_date, end_date):
+        """신용카드 월별 매출 집계 원본 응답을 반환한다."""
         raise NotImplementedError
