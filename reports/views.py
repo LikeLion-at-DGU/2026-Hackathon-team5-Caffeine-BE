@@ -1,97 +1,90 @@
-from django.core.files.base import ContentFile
-from django.core.mail import EmailMessage
-from django.http import FileResponse
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
+from django.http import HttpResponse
+from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from businesses.models import Business
-from .models import Report
-from .serializers import ReportSerializer
-from .services import generate_csv, generate_pdf
+from reports.exceptions import ReportServiceError
+from reports.serializers import ReportSerializer
+from reports.services import report_service
 
 
-def get_current_business():
-    return get_object_or_404(Business, pk=1)
+def _error_response(code: str, message: str, http_status: int, errors: dict | None = None) -> Response:
+    return Response(
+        {"success": False, "code": code, "message": message, "errors": errors or {}},
+        status=http_status,
+    )
 
 
 class ReportDetailView(APIView):
-    def get(self, request, year_month):
-        business = get_current_business()
-        report = get_object_or_404(Report, business=business, year_month=year_month)
-        return Response(ReportSerializer(report).data)
+    def get(self, request, business_id, year_month):
+        try:
+            report = report_service.get_report(business_id, year_month)
+        except ReportServiceError as e:
+            return _error_response(e.code, e.message, e.status_code)
+
+        return Response({
+            "success": True,
+            "code": "REPORT_DETAIL_SUCCESS",
+            "message": "리포트 현황을 조회했습니다.",
+            "data": ReportSerializer(report).data,
+        })
 
 
 class ReportGenerateView(APIView):
-    def post(self, request, year_month):
-        business = get_current_business()
+    def post(self, request, business_id, year_month):
+        try:
+            report = report_service.generate_report(business_id, year_month)
+        except ReportServiceError as e:
+            return _error_response(e.code, e.message, e.status_code)
 
-        report, _ = Report.objects.update_or_create(
-            business=business,
-            year_month=year_month,
-            defaults={"status": "generated", "approved_at": None},
-        )
-
-        if report.csv_file:
-            report.csv_file.delete(save=False)
-        if report.pdf_file:
-            report.pdf_file.delete(save=False)
-
-        report.csv_file.save(f"{year_month}.csv", ContentFile(generate_csv(business, year_month).encode("utf-8")), save=False)
-        report.pdf_file.save(f"{year_month}.pdf", ContentFile(generate_pdf(business, year_month)), save=False)
-        report.save()
-
-        return Response(ReportSerializer(report).data)
+        return Response({
+            "success": True,
+            "code": "REPORT_GENERATE_SUCCESS",
+            "message": "리포트를 생성했습니다.",
+            "data": ReportSerializer(report).data,
+        })
 
 
 class ReportDownloadView(APIView):
-    def get(self, request, year_month):
-        business = get_current_business()
-        report = get_object_or_404(Report, business=business, year_month=year_month)
+    def get(self, request, business_id, year_month):
+        file_type = request.query_params.get("type", "pdf")
+        try:
+            file_field = report_service.get_report_file(business_id, year_month, file_type)
+        except ReportServiceError as e:
+            return _error_response(e.code, e.message, e.status_code)
 
-        fmt = request.query_params.get("type", "pdf")
-        file_field = report.csv_file if fmt == "csv" else report.pdf_file
-        if not file_field:
-            return Response({"detail": "아직 생성된 파일이 없습니다."}, status=400)
-
-        return FileResponse(file_field.open("rb"), as_attachment=True, filename=file_field.name.split("/")[-1])
+        content_type = "text/csv" if file_type == "csv" else "application/pdf"
+        response = HttpResponse(file_field.read(), content_type=content_type)
+        filename = file_field.name.split("/")[-1]
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class ReportApproveView(APIView):
-    def post(self, request, year_month):
-        business = get_current_business()
-        report = get_object_or_404(Report, business=business, year_month=year_month)
+    def post(self, request, business_id, year_month):
+        try:
+            report = report_service.approve_report(business_id, year_month)
+        except ReportServiceError as e:
+            return _error_response(e.code, e.message, e.status_code)
 
-        report.status = "approved"
-        report.approved_at = timezone.now()
-        report.save()
-
-        return Response(ReportSerializer(report).data)
+        return Response({
+            "success": True,
+            "code": "REPORT_APPROVE_SUCCESS",
+            "message": "리포트를 승인했습니다.",
+            "data": ReportSerializer(report).data,
+        })
 
 
 class ReportSendEmailView(APIView):
-    def post(self, request, year_month):
-        business = get_current_business()
-        report = get_object_or_404(Report, business=business, year_month=year_month)
+    def post(self, request, business_id, year_month):
+        try:
+            report = report_service.send_report_email(business_id, year_month)
+        except ReportServiceError as e:
+            return _error_response(e.code, e.message, e.status_code)
 
-        if report.status != "approved":
-            return Response({"detail": "승인된 리포트만 전송할 수 있습니다."}, status=400)
-        if not business.tax_accountant_email:
-            return Response({"detail": "세무사 이메일이 등록되어 있지 않습니다."}, status=400)
-
-        email = EmailMessage(
-            subject=f"[카페비서] {year_month} 세무 자료 전달",
-            body=f"{business.name}의 {year_month} 세무사 전달용 자료입니다.",
-            to=[business.tax_accountant_email],
-        )
-        if report.csv_file:
-            email.attach_file(report.csv_file.path)
-        if report.pdf_file:
-            email.attach_file(report.pdf_file.path)
-        email.send()
-
-        report.sent_at = timezone.now()
-        report.save()
-
-        return Response(ReportSerializer(report).data)
+        return Response({
+            "success": True,
+            "code": "REPORT_SEND_EMAIL_SUCCESS",
+            "message": "세무사에게 자료를 전송했습니다.",
+            "data": ReportSerializer(report).data,
+        })
