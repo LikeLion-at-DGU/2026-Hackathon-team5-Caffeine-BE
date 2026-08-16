@@ -142,3 +142,6 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "businesses.exceptions.custom_exception_handler",
 }
 
+MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = "/media/"
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # 개발용
