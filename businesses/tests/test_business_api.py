@@ -37,6 +37,29 @@ class BusinessDetailApiTests(APITestCase):
         self.business.refresh_from_db()
         self.assertEqual(self.business.business_name, "카페비서 2호점")
 
+    def test_get_business_detail_representative_name_blank_by_default(self):
+        url = reverse("business-detail", kwargs={"pk": self.business.id})
+
+        res = self.client.get(url)
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["data"]["representative_name"], "")
+
+    def test_patch_can_update_representative_name(self):
+        url = reverse("business-detail", kwargs={"pk": self.business.id})
+
+        res = self.client.patch(
+            url,
+            {"representative_name": "유지은"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["data"]["representative_name"], "유지은")
+
+        self.business.refresh_from_db()
+        self.assertEqual(self.business.representative_name, "유지은")
+        
     def test_patch_cannot_change_is_demo(self):
         # 서버 관리 필드는 PATCH 요청으로 변경되지 않아야 한다.
         self.assertTrue(self.business.is_demo)

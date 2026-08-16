@@ -32,13 +32,15 @@ class BusinessInfoSerializer(serializers.Serializer):
     business_name = serializers.CharField()
     representative_name = serializers.CharField(allow_blank=True)
     business_number = serializers.CharField(allow_null=True, allow_blank=True)
-    tax_type = serializers.CharField()
+    tax_type = serializers.CharField(required=False)
     industry_code = serializers.CharField(allow_blank=True)
-
-
+    
 class BusinessInfoUpdateSerializer(serializers.Serializer):
     business_name = serializers.CharField(required=False)
     representative_name = serializers.CharField(required=False, allow_blank=True)
     business_number = serializers.CharField(required=False, allow_blank=True)
-    tax_type = serializers.CharField(required=False)
     industry_code = serializers.CharField(required=False, allow_blank=True)
+    # tax_type은 서버 관리 필드이므로 Settings PATCH에서는 수정 X
+    # 과세유형 변경은 이력 기록을 위해 tax-type/sync API를 통해 처리
+    
+    

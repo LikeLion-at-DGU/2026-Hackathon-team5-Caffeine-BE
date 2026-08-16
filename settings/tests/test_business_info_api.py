@@ -46,6 +46,13 @@ class BusinessInfoAPITests(TestCase):
         self.business.refresh_from_db()
         self.assertEqual(self.business.business_name, "카페비서 강남점")
 
+    def test_patch_cannot_change_tax_type(self):
+        response = self.client.patch(self.url, {"tax_type": "SIMPLE"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.business.refresh_from_db()
+        self.assertEqual(self.business.tax_type, "GENERAL")
+
     def test_update_both_fields_in_one_request(self):
         response = self.client.patch(
             self.url,
