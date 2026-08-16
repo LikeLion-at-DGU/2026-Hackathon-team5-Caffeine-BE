@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from businesses.models import Business
-from transactions.models import Transaction
+from transactions.models import MonthlySalesSummary, Transaction
 from transactions.services.sync_service import (
     TransactionSourceMismatchError,
     TransactionSyncService,
@@ -61,6 +61,8 @@ class TransactionSyncServiceTests(TestCase):
         ).first()
         transaction.category = Transaction.Category.OTHER
         transaction.classification_source = Transaction.ClassificationSource.USER
+        transaction.expense_purpose = Transaction.ExpensePurpose.BUSINESS
+        transaction.expense_purpose_source = Transaction.ClassificationSource.USER
         transaction.classification_confidence = None
         transaction.save()
 
@@ -69,6 +71,14 @@ class TransactionSyncServiceTests(TestCase):
 
         self.assertEqual(transaction.category, Transaction.Category.OTHER)
         self.assertEqual(transaction.classification_source, Transaction.ClassificationSource.USER)
+        self.assertEqual(
+            transaction.expense_purpose,
+            Transaction.ExpensePurpose.BUSINESS,
+        )
+        self.assertEqual(
+            transaction.expense_purpose_source,
+            Transaction.ClassificationSource.USER,
+        )
 
     def test_date_range_filters_mock_records(self):
         result = self.service.sync(
@@ -94,6 +104,38 @@ class TransactionSyncServiceTests(TestCase):
                 date(2026, 8, 31),
                 [Transaction.SourceType.CARD_PURCHASE],
             )
+
+    def test_credit_card_sales_summary_is_stored_separately_from_transactions(self):
+        result = self.service.sync(
+            self.business,
+            date(2026, 8, 1),
+            date(2026, 8, 31),
+            [MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY],
+        )
+
+        self.assertEqual(result["created_count"], 1)
+        self.assertEqual(result["transaction_created_count"], 0)
+        self.assertEqual(result["sales_summary_created_count"], 1)
+        self.assertEqual(result["skipped_outside_period_count"], 1)
+        self.assertEqual(Transaction.objects.count(), 0)
+        summary = MonthlySalesSummary.objects.get()
+        self.assertEqual(summary.year_month, "2026-08")
+        self.assertEqual(summary.transaction_count, 651)
+
+    def test_credit_card_sales_summary_sync_is_idempotent(self):
+        sources = [MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY]
+        self.service.sync(self.business, date(2026, 8, 1), date(2026, 8, 31), sources)
+
+        second = self.service.sync(
+            self.business,
+            date(2026, 8, 1),
+            date(2026, 8, 31),
+            sources,
+        )
+
+        self.assertEqual(second["created_count"], 0)
+        self.assertEqual(second["sales_summary_updated_count"], 1)
+        self.assertEqual(MonthlySalesSummary.objects.count(), 1)
 
 
 @override_settings(CODEF_MODE="mock")
@@ -138,3 +180,21 @@ class TransactionSyncApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["code"], "INVALID_TRANSACTION_SYNC_REQUEST")
+
+    def test_sync_endpoint_accepts_credit_card_monthly_sales_summary(self):
+        response = self.client.post(
+            reverse("transaction-sync"),
+            {
+                "business_id": self.business.id,
+                "start_date": "2026-08-01",
+                "end_date": "2026-08-31",
+                "sources": [
+                    MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["sales_summary_created_count"], 1)
+        self.assertEqual(MonthlySalesSummary.objects.count(), 1)

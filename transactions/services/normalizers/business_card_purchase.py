@@ -58,6 +58,9 @@ def normalize_business_card_purchases(payload):
                     if is_cancelled
                     else Transaction.CancelStatus.NORMAL
                 ),
+                source_deduction_status=_deduction_status(
+                    record.get("resDeductDescription")
+                ),
                 owner_business_number=owner_business_number,
                 classification_hints=text_values(
                     record.get("resMemberStoreName"),
@@ -69,3 +72,12 @@ def normalize_business_card_purchases(payload):
         )
 
     return results
+
+
+def _deduction_status(value):
+    text = str(value or "").strip()
+    if text == "공제":
+        return Transaction.SourceDeductionStatus.DEDUCTIBLE
+    if text == "불공제":
+        return Transaction.SourceDeductionStatus.NON_DEDUCTIBLE
+    return Transaction.SourceDeductionStatus.UNKNOWN

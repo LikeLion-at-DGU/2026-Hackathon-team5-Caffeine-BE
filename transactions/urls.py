@@ -6,6 +6,7 @@ from .views import (
     TransactionDuplicateListView,
     TransactionDuplicateResolutionView,
     TransactionListView,
+    TransactionPurposeView,
     TransactionSyncView,
 )
 
@@ -24,5 +25,10 @@ urlpatterns = [
         "<int:transaction_id>/category/",
         TransactionCategoryView.as_view(),
         name="transaction-category",
+    ),
+    path(
+        "<int:transaction_id>/purpose/",
+        TransactionPurposeView.as_view(),
+        name="transaction-purpose",
     ),
 ]

@@ -73,3 +73,8 @@ class BaseCodefProvider(ABC):
     def get_tax_invoice_sales(self, business, start_date, end_date):
         """전자세금계산서 매출 원본 응답을 반환한다."""
         raise NotImplementedError
+
+    @abstractmethod
+    def get_credit_card_sales_summary(self, business, start_date, end_date):
+        """신용카드 월별 매출 집계 원본 응답을 반환한다."""
+        raise NotImplementedError

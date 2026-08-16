@@ -26,6 +26,7 @@ class TransactionServiceTests(TestCase):
             "supply_amount": Decimal("170000.00"),
             "vat_amount": Decimal("17000.00"),
             "total_amount": Decimal("187000.00"),
+            "source_deduction_status": Transaction.SourceDeductionStatus.DEDUCTIBLE,
             "raw_data": {"source": "mock"},
         }
         values.update(overrides)
@@ -41,7 +42,12 @@ class TransactionServiceTests(TestCase):
 
         refreshed, created = self.ingestion.save(
             self.business,
-            self.normalized(merchant_name="서울우유 새 상호"),
+            self.normalized(
+                merchant_name="서울우유 새 상호",
+                source_deduction_status=(
+                    Transaction.SourceDeductionStatus.NON_DEDUCTIBLE
+                ),
+            ),
         )
 
         self.assertFalse(created)
@@ -49,6 +55,10 @@ class TransactionServiceTests(TestCase):
         self.assertEqual(refreshed.merchant_name, "서울우유 새 상호")
         self.assertEqual(refreshed.category, Transaction.Category.RAW_MATERIAL)
         self.assertEqual(refreshed.classification_source, Transaction.ClassificationSource.USER)
+        self.assertEqual(
+            refreshed.source_deduction_status,
+            Transaction.SourceDeductionStatus.NON_DEDUCTIBLE,
+        )
 
     def test_duplicate_detector_matches_different_sources(self):
         card, _ = self.ingestion.save(self.business, self.normalized())

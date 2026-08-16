@@ -1,10 +1,11 @@
 from django.test import TestCase
 
 from businesses.models import Business
-from transactions.models import Transaction, TransactionDuplicate
+from transactions.models import MonthlySalesSummary, Transaction, TransactionDuplicate
 from transactions.serializers import (
     DuplicateResolutionSerializer,
     TransactionCategoryUpdateSerializer,
+    TransactionPurposeUpdateSerializer,
     TransactionSyncRequestSerializer,
 )
 
@@ -23,6 +24,7 @@ class TransactionSerializerContractTests(TestCase):
                     Transaction.SourceType.CARD_PURCHASE,
                     Transaction.SourceType.CASH_RECEIPT_SALE,
                     Transaction.SourceType.TAX_INVOICE,
+                    MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY,
                 ],
             }
         )
@@ -49,6 +51,17 @@ class TransactionSerializerContractTests(TestCase):
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_purpose_update_accepts_business_or_personal(self):
+        business = TransactionPurposeUpdateSerializer(
+            data={"expense_purpose": Transaction.ExpensePurpose.BUSINESS}
+        )
+        personal = TransactionPurposeUpdateSerializer(
+            data={"expense_purpose": Transaction.ExpensePurpose.PERSONAL}
+        )
+
+        self.assertTrue(business.is_valid(), business.errors)
+        self.assertTrue(personal.is_valid(), personal.errors)
 
     def test_duplicate_resolution_only_accepts_terminal_status(self):
         pending = DuplicateResolutionSerializer(data={"status": TransactionDuplicate.Status.PENDING})

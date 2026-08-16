@@ -6,7 +6,7 @@ from django.db import IntegrityError, transaction as db_transaction
 from django.test import TestCase
 
 from businesses.models import Business
-from transactions.models import Transaction, TransactionDuplicate
+from transactions.models import MonthlySalesSummary, Transaction, TransactionDuplicate
 
 
 class TransactionModelTests(TestCase):
@@ -33,7 +33,16 @@ class TransactionModelTests(TestCase):
 
         self.assertEqual(item.category, Transaction.Category.UNCLASSIFIED)
         self.assertEqual(item.classification_source, Transaction.ClassificationSource.UNCLASSIFIED)
+        self.assertEqual(item.expense_purpose, Transaction.ExpensePurpose.UNCLASSIFIED)
+        self.assertEqual(
+            item.expense_purpose_source,
+            Transaction.ClassificationSource.UNCLASSIFIED,
+        )
         self.assertEqual(item.cancel_status, Transaction.CancelStatus.NORMAL)
+        self.assertEqual(
+            item.source_deduction_status,
+            Transaction.SourceDeductionStatus.UNKNOWN,
+        )
 
     def test_external_id_is_unique_per_business_and_source(self):
         self.create_transaction()
@@ -74,3 +83,31 @@ class TransactionModelTests(TestCase):
 
         with self.assertRaises(ValidationError):
             duplicate.full_clean()
+
+
+class MonthlySalesSummaryModelTests(TestCase):
+    def setUp(self):
+        self.business = Business.objects.create(business_name="카페비서 데모카페")
+
+    def create_summary(self, **overrides):
+        values = {
+            "business": self.business,
+            "source_type": MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY,
+            "year": 2026,
+            "month": 8,
+            "transaction_count": 651,
+            "total_amount": Decimal("9120000.00"),
+        }
+        values.update(overrides)
+        return MonthlySalesSummary.objects.create(**values)
+
+    def test_year_month_is_formatted_for_api_consumers(self):
+        summary = self.create_summary()
+
+        self.assertEqual(summary.year_month, "2026-08")
+
+    def test_summary_is_unique_per_business_source_and_month(self):
+        self.create_summary()
+
+        with self.assertRaises(IntegrityError), db_transaction.atomic():
+            self.create_summary(transaction_count=999)

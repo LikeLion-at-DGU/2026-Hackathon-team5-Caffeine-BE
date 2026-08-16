@@ -3,14 +3,18 @@ from collections import Counter
 from django.db import transaction as db_transaction
 
 from integrations.codef.factory import get_codef_provider
-from transactions.models import Transaction, TransactionDuplicate
+from transactions.models import MonthlySalesSummary, Transaction, TransactionDuplicate
 
 from .classifier import RuleBasedTransactionClassifier
 from .duplicate_detector import DuplicateDetector
-from .ingestion_service import TransactionIngestionService
+from .ingestion_service import (
+    MonthlySalesSummaryIngestionService,
+    TransactionIngestionService,
+)
 from .normalizers import (
     normalize_business_card_purchases,
     normalize_cash_receipt_sales,
+    normalize_credit_card_sales_summaries,
     normalize_tax_invoices,
 )
 from .normalizers.helpers import normalized_business_number
@@ -25,11 +29,13 @@ class TransactionSyncService:
         Transaction.SourceType.CARD_PURCHASE,
         Transaction.SourceType.CASH_RECEIPT_SALE,
         Transaction.SourceType.TAX_INVOICE,
+        MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY,
     )
 
     def __init__(self, provider=None):
         self.provider = provider or get_codef_provider()
         self.ingestion = TransactionIngestionService()
+        self.sales_summary_ingestion = MonthlySalesSummaryIngestionService()
         self.classifier = RuleBasedTransactionClassifier()
         self.duplicate_detector = DuplicateDetector()
 
@@ -40,9 +46,27 @@ class TransactionSyncService:
         skipped_outside_period = 0
         source_results = []
         category_counts = Counter()
+        transaction_created_count = 0
+        transaction_updated_count = 0
+        sales_summary_created_count = 0
+        sales_summary_updated_count = 0
         duplicates_before = TransactionDuplicate.objects.filter(business=business).count()
 
         for source in sources:
+            if source == MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY:
+                result = self._sync_credit_card_sales_summaries(
+                    business,
+                    start_date,
+                    end_date,
+                )
+                total_created += result["created_count"]
+                total_updated += result["updated_count"]
+                sales_summary_created_count += result["created_count"]
+                sales_summary_updated_count += result["updated_count"]
+                skipped_outside_period += result["skipped_count"]
+                source_results.append(result["source_result"])
+                continue
+
             normalized_items = self._fetch_and_normalize(
                 source,
                 business,
@@ -71,9 +95,12 @@ class TransactionSyncService:
 
             total_created += source_created
             total_updated += source_updated
+            transaction_created_count += source_created
+            transaction_updated_count += source_updated
             source_results.append(
                 {
                     "source_type": source,
+                    "record_type": "TRANSACTION",
                     "fetched_count": len(normalized_items),
                     "in_period_count": len(in_period),
                     "created_count": source_created,
@@ -91,10 +118,53 @@ class TransactionSyncService:
             "source_results": source_results,
             "created_count": total_created,
             "updated_count": total_updated,
+            "transaction_created_count": transaction_created_count,
+            "transaction_updated_count": transaction_updated_count,
+            "sales_summary_created_count": sales_summary_created_count,
+            "sales_summary_updated_count": sales_summary_updated_count,
             "skipped_outside_period_count": skipped_outside_period,
             "new_duplicate_candidate_count": max(0, duplicates_after - duplicates_before),
             "duplicate_candidate_total_count": duplicates_after,
             "category_counts": dict(category_counts),
+        }
+
+    def _sync_credit_card_sales_summaries(self, business, start_date, end_date):
+        payload = self.provider.get_credit_card_sales_summary(
+            business,
+            start_date,
+            end_date,
+        )
+        normalized_items = normalize_credit_card_sales_summaries(payload)
+        start_period = (start_date.year, start_date.month)
+        end_period = (end_date.year, end_date.month)
+        in_period = [
+            item
+            for item in normalized_items
+            if start_period <= (item.year, item.month) <= end_period
+        ]
+        created_count = 0
+        updated_count = 0
+        for normalized in in_period:
+            _, created = self.sales_summary_ingestion.save(business, normalized)
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+        return {
+            "created_count": created_count,
+            "updated_count": updated_count,
+            "skipped_count": len(normalized_items) - len(in_period),
+            "source_result": {
+                "source_type": (
+                    MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY
+                ),
+                "record_type": "MONTHLY_SALES_SUMMARY",
+                "fetched_count": len(normalized_items),
+                "in_period_count": len(in_period),
+                "created_count": created_count,
+                "updated_count": updated_count,
+            },
         }
 
     def _fetch_and_normalize(self, source, business, start_date, end_date):

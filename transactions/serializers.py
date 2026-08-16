@@ -3,13 +3,17 @@ from rest_framework import serializers
 
 from businesses.models import Business
 
-from .models import Transaction, TransactionDuplicate
+from .models import MonthlySalesSummary, Transaction, TransactionDuplicate
 
 
 TRANSACTION_SYNC_SOURCE_CHOICES = [
     (Transaction.SourceType.CARD_PURCHASE, Transaction.SourceType.CARD_PURCHASE.label),
     (Transaction.SourceType.CASH_RECEIPT_SALE, Transaction.SourceType.CASH_RECEIPT_SALE.label),
     (Transaction.SourceType.TAX_INVOICE, Transaction.SourceType.TAX_INVOICE.label),
+    (
+        MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY,
+        MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY.label,
+    ),
 ]
 
 
@@ -49,6 +53,10 @@ class TransactionListQuerySerializer(serializers.Serializer):
     )
     source_type = serializers.ChoiceField(choices=Transaction.SourceType.choices, required=False)
     category = serializers.ChoiceField(choices=Transaction.Category.choices, required=False)
+    expense_purpose = serializers.ChoiceField(
+        choices=Transaction.ExpensePurpose.choices,
+        required=False,
+    )
     page = serializers.IntegerField(min_value=1, default=1)
     page_size = serializers.IntegerField(min_value=1, max_value=100, default=20)
 
@@ -81,6 +89,7 @@ class TransactionSerializer(serializers.ModelSerializer):
     date = serializers.DateField(source="transaction_date", read_only=True)
     time = serializers.TimeField(source="transaction_time", read_only=True, allow_null=True)
     category = serializers.SerializerMethodField()
+    expense_purpose = serializers.SerializerMethodField()
     duplicate = serializers.SerializerMethodField()
 
     class Meta:
@@ -102,6 +111,8 @@ class TransactionSerializer(serializers.ModelSerializer):
             "approval_no",
             "cancel_status",
             "category",
+            "expense_purpose",
+            "source_deduction_status",
             "duplicate",
             "created_at",
             "updated_at",
@@ -128,6 +139,14 @@ class TransactionSerializer(serializers.ModelSerializer):
         }
 
     @staticmethod
+    def get_expense_purpose(obj):
+        return {
+            "code": obj.expense_purpose,
+            "label": obj.get_expense_purpose_display(),
+            "source": obj.expense_purpose_source,
+        }
+
+    @staticmethod
     def get_duplicate(obj):
         pending = TransactionDuplicate.objects.filter(
             Q(primary_transaction=obj) | Q(suspected_transaction=obj),
@@ -138,6 +157,16 @@ class TransactionSerializer(serializers.ModelSerializer):
 
 class TransactionCategoryUpdateSerializer(serializers.Serializer):
     category = serializers.ChoiceField(choices=Transaction.Category.choices)
+
+
+class TransactionPurposeUpdateSerializer(serializers.Serializer):
+    expense_purpose = serializers.ChoiceField(
+        choices=[
+            Transaction.ExpensePurpose.BUSINESS,
+            Transaction.ExpensePurpose.PERSONAL,
+            Transaction.ExpensePurpose.UNCLASSIFIED,
+        ]
+    )
 
 
 class TransactionDuplicateSerializer(serializers.ModelSerializer):

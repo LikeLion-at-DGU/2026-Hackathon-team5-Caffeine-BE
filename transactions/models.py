@@ -30,11 +30,21 @@ class Transaction(models.Model):
         EQUIPMENT = "EQUIPMENT", "시설·장비"
         OTHER = "OTHER", "기타"
 
+    class ExpensePurpose(models.TextChoices):
+        UNCLASSIFIED = "UNCLASSIFIED", "미분류"
+        BUSINESS = "BUSINESS", "사업 지출"
+        PERSONAL = "PERSONAL", "개인 지출"
+
     class ClassificationSource(models.TextChoices):
         UNCLASSIFIED = "UNCLASSIFIED", "미분류"
         AI = "AI", "AI"
         USER = "USER", "사용자"
         RULE = "RULE", "규칙"
+
+    class SourceDeductionStatus(models.TextChoices):
+        UNKNOWN = "UNKNOWN", "원본 정보 없음"
+        DEDUCTIBLE = "DEDUCTIBLE", "CODEF 공제 표시"
+        NON_DEDUCTIBLE = "NON_DEDUCTIBLE", "CODEF 불공제 표시"
 
     business = models.ForeignKey(
         "businesses.Business",
@@ -73,6 +83,21 @@ class Transaction(models.Model):
         null=True,
         blank=True,
     )
+    expense_purpose = models.CharField(
+        max_length=20,
+        choices=ExpensePurpose.choices,
+        default=ExpensePurpose.UNCLASSIFIED,
+    )
+    expense_purpose_source = models.CharField(
+        max_length=20,
+        choices=ClassificationSource.choices,
+        default=ClassificationSource.UNCLASSIFIED,
+    )
+    source_deduction_status = models.CharField(
+        max_length=20,
+        choices=SourceDeductionStatus.choices,
+        default=SourceDeductionStatus.UNKNOWN,
+    )
     raw_data = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -99,10 +124,62 @@ class Transaction(models.Model):
                 name="txn_biz_type_date_idx",
             ),
             models.Index(fields=["business", "category"], name="txn_biz_category_idx"),
+            models.Index(
+                fields=["business", "expense_purpose", "transaction_date"],
+                name="txn_biz_purpose_date_idx",
+            ),
         ]
 
     def __str__(self):
         return f"{self.business_id}/{self.transaction_date}/{self.merchant_name or self.external_id}"
+
+
+class MonthlySalesSummary(models.Model):
+    class SourceType(models.TextChoices):
+        CREDIT_CARD_SALES_SUMMARY = (
+            "CREDIT_CARD_SALES_SUMMARY",
+            "신용카드 월 매출자료",
+        )
+
+    business = models.ForeignKey(
+        "businesses.Business",
+        on_delete=models.CASCADE,
+        related_name="monthly_sales_summaries",
+    )
+    source_type = models.CharField(max_length=30, choices=SourceType.choices)
+    year = models.PositiveSmallIntegerField()
+    month = models.PositiveSmallIntegerField()
+    transaction_count = models.PositiveIntegerField(default=0)
+    total_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    raw_data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-year", "-month", "source_type"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["business", "source_type", "year", "month"],
+                name="uniq_monthly_sales_summary",
+            ),
+            models.CheckConstraint(
+                condition=Q(month__gte=1, month__lte=12),
+                name="sales_summary_month_range",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["business", "year", "month"],
+                name="sales_sum_biz_period_idx",
+            ),
+        ]
+
+    @property
+    def year_month(self):
+        return f"{self.year:04d}-{self.month:02d}"
+
+    def __str__(self):
+        return f"{self.business_id}/{self.year_month}/{self.source_type}"
 
 
 class TransactionDuplicate(models.Model):

@@ -11,6 +11,7 @@ from .serializers import (
     TransactionCategoryUpdateSerializer,
     TransactionDuplicateSerializer,
     TransactionListQuerySerializer,
+    TransactionPurposeUpdateSerializer,
     TransactionSerializer,
     TransactionSyncRequestSerializer,
 )
@@ -89,7 +90,7 @@ class TransactionListView(APIView):
             queryset = queryset.filter(transaction_date__gte=params["start_date"])
         if params.get("end_date"):
             queryset = queryset.filter(transaction_date__lte=params["end_date"])
-        for field in ["transaction_type", "source_type", "category"]:
+        for field in ["transaction_type", "source_type", "category", "expense_purpose"]:
             if params.get(field):
                 queryset = queryset.filter(**{field: params[field]})
 
@@ -154,6 +155,40 @@ class TransactionCategoryView(APIView):
         return success_response(
             code="TRANSACTION_CATEGORY_UPDATED",
             message="거래 카테고리를 수정했습니다.",
+            data=TransactionSerializer(transaction).data,
+        )
+
+
+class TransactionPurposeView(APIView):
+    def patch(self, request, transaction_id):
+        transaction = Transaction.objects.filter(id=transaction_id).first()
+        if transaction is None:
+            return error_response(
+                code="TRANSACTION_NOT_FOUND",
+                message="거래를 찾을 수 없습니다.",
+                status=404,
+            )
+
+        serializer = TransactionPurposeUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                code="INVALID_TRANSACTION_PURPOSE",
+                message="지출 목적 값이 올바르지 않습니다.",
+                errors=serializer.errors,
+            )
+
+        transaction.expense_purpose = serializer.validated_data["expense_purpose"]
+        transaction.expense_purpose_source = Transaction.ClassificationSource.USER
+        transaction.save(
+            update_fields=[
+                "expense_purpose",
+                "expense_purpose_source",
+                "updated_at",
+            ]
+        )
+        return success_response(
+            code="TRANSACTION_PURPOSE_UPDATED",
+            message="거래의 지출 목적을 수정했습니다.",
             data=TransactionSerializer(transaction).data,
         )
 

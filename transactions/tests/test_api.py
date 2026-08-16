@@ -69,6 +69,14 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(response.data["data"]["transaction_id"], self.card.id)
         self.assertEqual(response.data["data"]["business_id"], self.business.id)
         self.assertEqual(response.data["data"]["source"], "CARD")
+        self.assertEqual(
+            response.data["data"]["expense_purpose"],
+            {
+                "code": Transaction.ExpensePurpose.UNCLASSIFIED,
+                "label": "미분류",
+                "source": Transaction.ClassificationSource.UNCLASSIFIED,
+            },
+        )
         self.assertNotIn("raw_data", response.data["data"])
 
     def test_category_patch_marks_source_as_user(self):
@@ -87,6 +95,40 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(self.card.category, Transaction.Category.RAW_MATERIAL)
         self.assertEqual(self.card.classification_source, Transaction.ClassificationSource.USER)
         self.assertIsNone(self.card.classification_confidence)
+
+    def test_purpose_patch_marks_source_as_user(self):
+        response = self.client.patch(
+            reverse("transaction-purpose", kwargs={"transaction_id": self.card.id}),
+            {"expense_purpose": Transaction.ExpensePurpose.BUSINESS},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["code"], "TRANSACTION_PURPOSE_UPDATED")
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.expense_purpose, Transaction.ExpensePurpose.BUSINESS)
+        self.assertEqual(
+            self.card.expense_purpose_source,
+            Transaction.ClassificationSource.USER,
+        )
+
+    def test_list_filters_by_expense_purpose(self):
+        self.card.expense_purpose = Transaction.ExpensePurpose.BUSINESS
+        self.card.expense_purpose_source = Transaction.ClassificationSource.USER
+        self.card.save()
+
+        response = self.client.get(
+            reverse("transaction-list"),
+            {
+                "business_id": self.business.id,
+                "expense_purpose": Transaction.ExpensePurpose.BUSINESS,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        items = response.data["data"]["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["transaction_id"], self.card.id)
 
     def test_duplicate_list_defaults_to_pending(self):
         response = self.client.get(

@@ -52,6 +52,25 @@ def parse_decimal(value):
         raise TransactionNormalizationError(f"올바르지 않은 금액입니다: {value!r}") from exc
 
 
+def parse_integer(value):
+    text = str(value or "0").strip().replace(",", "")
+    try:
+        return int(text or "0")
+    except ValueError as exc:
+        raise TransactionNormalizationError(f"올바르지 않은 정수입니다: {value!r}") from exc
+
+
+def parse_year_month(value):
+    text = str(value or "").strip().replace("-", "")
+    if len(text) != 6 or not text.isdigit():
+        raise TransactionNormalizationError(f"올바르지 않은 연월입니다: {value!r}")
+    year = int(text[:4])
+    month = int(text[4:])
+    if not 1 <= month <= 12:
+        raise TransactionNormalizationError(f"올바르지 않은 연월입니다: {value!r}")
+    return year, month
+
+
 def normalized_business_number(value):
     return "".join(character for character in str(value or "") if character.isdigit())
 

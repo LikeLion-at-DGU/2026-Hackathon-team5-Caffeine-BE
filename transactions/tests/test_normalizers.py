@@ -4,10 +4,11 @@ from decimal import Decimal
 from django.test import SimpleTestCase
 
 from integrations.codef.mock import load_fixture
-from transactions.models import Transaction
+from transactions.models import MonthlySalesSummary, Transaction
 from transactions.services.normalizers import (
     normalize_business_card_purchases,
     normalize_cash_receipt_sales,
+    normalize_credit_card_sales_summaries,
     normalize_tax_invoices,
 )
 
@@ -26,6 +27,18 @@ class CodefTransactionNormalizerTests(SimpleTestCase):
         self.assertEqual(first.transaction_date, date(2026, 8, 3))
         self.assertEqual(first.merchant_business_number, "3012245678")
         self.assertTrue(first.external_id.startswith("CARD_PURCHASE:HASH:"))
+        self.assertEqual(
+            sum(
+                item.source_deduction_status
+                == Transaction.SourceDeductionStatus.DEDUCTIBLE
+                for item in items
+            ),
+            11,
+        )
+        self.assertEqual(
+            items[-1].source_deduction_status,
+            Transaction.SourceDeductionStatus.NON_DEDUCTIBLE,
+        )
 
     def test_card_hash_external_id_is_stable(self):
         payload = load_fixture("business_card_purchase_success.json")
@@ -63,3 +76,20 @@ class CodefTransactionNormalizerTests(SimpleTestCase):
         self.assertIn("에티오피아 예가체프 원두", purchases[0].classification_hints)
         self.assertEqual(sales[0].merchant_name, "스튜디오 온")
         self.assertEqual(sales[0].classification_hints, ())
+
+    def test_credit_card_sales_are_normalized_as_monthly_summaries(self):
+        items = normalize_credit_card_sales_summaries(
+            load_fixture("credit_card_sales_success.json")
+        )
+
+        self.assertEqual(len(items), 2)
+        self.assertEqual(
+            items[0].source_type,
+            MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY,
+        )
+        self.assertEqual((items[0].year, items[0].month), (2026, 7))
+        self.assertEqual(items[0].transaction_count, 612)
+        self.assertEqual(items[0].total_amount, Decimal("8340000"))
+        self.assertEqual((items[1].year, items[1].month), (2026, 8))
+        self.assertEqual(items[1].transaction_count, 651)
+        self.assertEqual(items[1].total_amount, Decimal("9120000"))

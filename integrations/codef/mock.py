@@ -75,6 +75,9 @@ class MockCodefProvider(BaseCodefProvider):
     def get_tax_invoice_sales(self, business, start_date, end_date):
         return load_fixture("tax_invoice_sales_success.json")
 
+    def get_credit_card_sales_summary(self, business, start_date, end_date):
+        return load_fixture("credit_card_sales_success.json")
+
     @staticmethod
     def _normalize_hometax(raw):
         # CODEF 2-way 응답을 Service에서 사용할 공통 형식으로 변환한다.
