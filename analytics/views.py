@@ -6,6 +6,10 @@ from analytics.exceptions import AnalyticsServiceError
 from analytics.services import monthly_close_service
 from analytics.services.monthly_summary_service import get_monthly_tax_summary
 
+from django.http import HttpResponse
+
+from analytics.services.export_service import build_export
+
 
 def _error_response(code: str, message: str, http_status: int, errors: dict | None = None) -> Response:
     return Response(
@@ -55,3 +59,32 @@ class MonthlyCloseView(APIView):
                 "is_export_available": True,
             },
         })
+
+
+class ExportView(APIView):
+    def get(self, request, business_id):
+        year = request.query_params.get("year")
+        month = request.query_params.get("month")
+        export_format = request.query_params.get("file_type")
+
+        if not year or not month or export_format not in ("pdf", "xlsx"):
+            return _error_response(
+                "INVALID_EXPORT_FORMAT", "지원하지 않는 파일 형식입니다.", status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            file_bytes = build_export(business_id, int(year), int(month), export_format)
+        except AnalyticsServiceError as e:
+            return _error_response(e.code, e.message, status.HTTP_409_CONFLICT)
+
+        if export_format == "xlsx":
+            response = HttpResponse(
+                file_bytes,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            response["Content-Disposition"] = f'attachment; filename="tax_export_{year}_{month}.xlsx"'
+            return response
+
+        response = HttpResponse(file_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="tax_export_{year}_{month}.pdf"'
+        return response
