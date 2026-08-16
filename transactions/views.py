@@ -95,6 +95,18 @@ class TransactionSyncView(APIView):
             )
 
         params = serializer.validated_data
+        from tax.services.closing_service import MonthlyCloseService
+
+        if MonthlyCloseService.has_closed_month_between(
+            business_id=params["business"].id,
+            start_date=params["start_date"],
+            end_date=params["end_date"],
+        ):
+            return error_response(
+                code="MONTH_ALREADY_CLOSED",
+                message="마감된 월과 겹치는 거래는 다시 동기화할 수 없습니다.",
+                status=409,
+            )
         try:
             result = TransactionSyncService().sync(
                 business=params["business"],
@@ -196,6 +208,18 @@ class TransactionCategoryView(APIView):
                 status=404,
             )
 
+        from tax.services.closing_service import MonthlyCloseService
+
+        if MonthlyCloseService.is_closed(
+            business_id=transaction.business_id,
+            transaction_date=transaction.transaction_date,
+        ):
+            return error_response(
+                code="MONTH_ALREADY_CLOSED",
+                message="마감된 월의 거래는 수정할 수 없습니다.",
+                status=409,
+            )
+
         serializer = TransactionCategoryUpdateSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(
@@ -239,6 +263,18 @@ class TransactionPurposeView(APIView):
                 code="TRANSACTION_NOT_FOUND",
                 message="거래를 찾을 수 없습니다.",
                 status=404,
+            )
+
+        from tax.services.closing_service import MonthlyCloseService
+
+        if MonthlyCloseService.is_closed(
+            business_id=transaction.business_id,
+            transaction_date=transaction.transaction_date,
+        ):
+            return error_response(
+                code="MONTH_ALREADY_CLOSED",
+                message="마감된 월의 거래는 수정할 수 없습니다.",
+                status=409,
             )
 
         serializer = TransactionPurposeUpdateSerializer(data=request.data)

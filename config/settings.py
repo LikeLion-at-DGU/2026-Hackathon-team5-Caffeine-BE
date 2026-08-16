@@ -51,7 +51,12 @@ INSTALLED_APPS = [
     'transactions',
     'settings',
     "reports",
+    "tax",
+    "chat",
 ]
+
+# 실제 LLM을 연결할 때 이 경로만 교체하면 API와 대화 이력 모델은 그대로 유지된다.
+CHAT_RESPONDER_CLASS = "chat.services.responder.RuleBasedChatResponder"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

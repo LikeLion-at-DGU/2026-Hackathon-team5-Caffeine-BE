@@ -1,0 +1,215 @@
+import math
+
+from rest_framework.views import APIView
+
+from businesses.api_response import error_response, success_response
+from transactions.models import Transaction
+
+from .models import DeductionReview, MonthlyClose
+from .serializers import (
+    BusinessPeriodQuerySerializer,
+    DeductionConfirmSerializer,
+    DeductionListQuerySerializer,
+    DeductionReviewSerializer,
+)
+from .services.closing_service import (
+    MonthAlreadyClosed,
+    MonthlyCloseService,
+    UnconfirmedTransactionsExist,
+)
+from .services.deduction_service import DeductionReviewService
+from .services.periods import month_range, parse_year_month
+from .services.querysets import effective_purchase_transactions
+from .services.vat_service import UnsupportedTaxType, VatForecastService
+
+
+def _invalid_query(serializer, code="INVALID_PERIOD"):
+    return error_response(
+        code=code,
+        message="조회 조건이 올바르지 않습니다.",
+        errors=serializer.errors,
+    )
+
+
+class DeductionListView(APIView):
+    def get(self, request):
+        query = DeductionListQuerySerializer(data=request.query_params)
+        if not query.is_valid():
+            return _invalid_query(query, "INVALID_DEDUCTION_QUERY")
+
+        params = query.validated_data
+        year, month = parse_year_month(params["year_month"])
+        start_date, end_date = month_range(year, month)
+        purchases = effective_purchase_transactions(
+            business=params["business"],
+            start_date=start_date,
+            end_date=end_date,
+        )
+        DeductionReviewService.ensure_for_queryset(purchases)
+        reviews = DeductionReview.objects.select_related("transaction", "transaction__business").filter(
+            transaction__in=purchases
+        )
+        for field in ["suggested_status", "confirmed_status"]:
+            if params.get(field):
+                reviews = reviews.filter(**{field: params[field]})
+
+        total_count = reviews.count()
+        offset = (params["page"] - 1) * params["page_size"]
+        items = reviews[offset : offset + params["page_size"]]
+        return success_response(
+            code="DEDUCTION_LIST_SUCCESS",
+            message="공제 검토 거래를 조회했습니다.",
+            data={
+                "items": DeductionReviewSerializer(items, many=True).data,
+                "pagination": {
+                    "page": params["page"],
+                    "page_size": params["page_size"],
+                    "total_count": total_count,
+                    "total_pages": math.ceil(total_count / params["page_size"]),
+                },
+            },
+        )
+
+
+class DeductionConfirmView(APIView):
+    def patch(self, request, transaction_id):
+        transaction = Transaction.objects.filter(
+            id=transaction_id,
+            transaction_type=Transaction.TransactionType.PURCHASE,
+        ).first()
+        if transaction is None:
+            return error_response(
+                code="TRANSACTION_NOT_FOUND",
+                message="공제 검토 대상 거래를 찾을 수 없습니다.",
+                status=404,
+            )
+        if MonthlyCloseService.is_closed(
+            business_id=transaction.business_id,
+            transaction_date=transaction.transaction_date,
+        ):
+            return error_response(
+                code="MONTH_ALREADY_CLOSED",
+                message="마감된 월의 공제 여부는 수정할 수 없습니다.",
+                status=409,
+            )
+
+        serializer = DeductionConfirmSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                code="INVALID_DEDUCTION_STATUS",
+                message="공제 확정 상태가 올바르지 않습니다.",
+                errors=serializer.errors,
+            )
+        review = DeductionReviewService.get_or_create(transaction)
+        review = DeductionReviewService.confirm(
+            review=review,
+            confirmed_status=serializer.validated_data["confirmed_status"],
+        )
+        return success_response(
+            code="DEDUCTION_CONFIRMED",
+            message="공제 여부를 최종 확인했습니다.",
+            data=DeductionReviewSerializer(review).data,
+        )
+
+
+class DeductionAiSuggestView(APIView):
+    def post(self, request, transaction_id):
+        if not Transaction.objects.filter(
+            id=transaction_id,
+            transaction_type=Transaction.TransactionType.PURCHASE,
+        ).exists():
+            return error_response(
+                code="TRANSACTION_NOT_FOUND",
+                message="공제 검토 대상 거래를 찾을 수 없습니다.",
+                status=404,
+            )
+        return error_response(
+            code="AI_SUGGESTION_NOT_CONFIGURED",
+            message="AI 공제 추천은 현재 비활성화되어 있습니다.",
+            status=501,
+        )
+
+
+class VatForecastView(APIView):
+    def get(self, request):
+        query = BusinessPeriodQuerySerializer(data=request.query_params)
+        if not query.is_valid():
+            return _invalid_query(query)
+        params = query.validated_data
+        year, month = parse_year_month(params["year_month"])
+        try:
+            data = VatForecastService.calculate(
+                business=params["business"],
+                year=year,
+                month=month,
+            )
+        except UnsupportedTaxType as exc:
+            return error_response(
+                code="UNSUPPORTED_TAX_TYPE",
+                message=str(exc),
+                status=422,
+            )
+        return success_response(
+            code="VAT_FORECAST_SUCCESS",
+            message="예상 부가세를 조회했습니다.",
+            data=data,
+        )
+
+
+class MonthlyCloseDetailView(APIView):
+    def get(self, request, year_month):
+        query = BusinessPeriodQuerySerializer(
+            data={"business_id": request.query_params.get("business_id"), "year_month": year_month}
+        )
+        if not query.is_valid():
+            return _invalid_query(query, "INVALID_YEAR_MONTH")
+        params = query.validated_data
+        year, month = parse_year_month(year_month)
+        close = MonthlyClose.objects.filter(
+            business=params["business"], year=year, month=month, status=MonthlyClose.Status.CLOSED
+        ).first()
+        try:
+            data = close.snapshot if close else MonthlyCloseService.build_summary(
+                business=params["business"], year=year, month=month
+            )
+        except UnsupportedTaxType as exc:
+            return error_response(code="UNSUPPORTED_TAX_TYPE", message=str(exc), status=422)
+        return success_response(
+            code="MONTHLY_CLOSE_DETAIL_SUCCESS",
+            message="월 마감 요약을 조회했습니다.",
+            data=data,
+        )
+
+
+class MonthlyCloseApproveView(APIView):
+    def post(self, request, year_month):
+        query = BusinessPeriodQuerySerializer(
+            data={"business_id": request.data.get("business_id"), "year_month": year_month}
+        )
+        if not query.is_valid():
+            return _invalid_query(query, "INVALID_YEAR_MONTH")
+        params = query.validated_data
+        year, month = parse_year_month(year_month)
+        try:
+            data = MonthlyCloseService.approve(
+                business=params["business"], year=year, month=month
+            )
+        except MonthAlreadyClosed:
+            return error_response(
+                code="MONTH_ALREADY_CLOSED",
+                message="이미 마감된 월입니다.",
+                status=409,
+            )
+        except UnconfirmedTransactionsExist:
+            return error_response(
+                code="UNCONFIRMED_TRANSACTIONS_EXIST",
+                message="공제 여부가 확정되지 않은 거래가 남아 있습니다.",
+                status=422,
+            )
+        except UnsupportedTaxType as exc:
+            return error_response(code="UNSUPPORTED_TAX_TYPE", message=str(exc), status=422)
+        return success_response(
+            code="MONTHLY_CLOSE_APPROVED",
+            message="월 마감을 승인했습니다.",
+            data=data,
+        )
