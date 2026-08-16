@@ -18,6 +18,7 @@ class BusinessSerializer(serializers.ModelSerializer):
         fields = [
             "business_id",
             "business_name",
+            "representative_name",
             "business_number",
             "industry_code",
             "business_type",
