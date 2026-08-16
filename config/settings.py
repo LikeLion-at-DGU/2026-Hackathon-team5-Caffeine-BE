@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'payroll',
     'businesses',
     "transactions",
+    "tax",
 ]
 
 MIDDLEWARE = [
