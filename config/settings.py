@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'payroll',
     'businesses',
+    'settings',
 ]
 
 MIDDLEWARE = [
@@ -132,6 +133,7 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CODEF_MODE = "mock"
+PAYMENT_GATEWAY_MODE = "mock"
 
 REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "businesses.exceptions.custom_exception_handler",
