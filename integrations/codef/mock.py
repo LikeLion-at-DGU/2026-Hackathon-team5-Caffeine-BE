@@ -1,7 +1,7 @@
 import json
 import os
 
-from .base import BaseCodefProvider
+from .base import BaseCodefProvider, CodefBusinessAccessError
 
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -21,6 +21,27 @@ def load_fixture(filename):
 
 class MockCodefProvider(BaseCodefProvider):
     """개발 및 테스트용 CODEF Mock Provider."""
+
+    def ensure_business_access(self, business, source_type):
+        requested = "".join(
+            character
+            for character in str(business.business_number or "")
+            if character.isdigit()
+        )
+        fixture_owner = "".join(
+            character
+            for character in str(
+                load_fixture("business_status_success.json").get(
+                    "resCompanyIdentityNo",
+                    "",
+                )
+            )
+            if character.isdigit()
+        )
+        if not requested or requested != fixture_owner:
+            raise CodefBusinessAccessError(
+                "요청 사업장을 현재 Mock 거래 데이터 소유자로 확인할 수 없습니다."
+            )
 
     def get_business_status(self, business_number):
         # 사업자등록상태 조회 성공 상황을 가정한 Mock 응답
@@ -62,6 +83,21 @@ class MockCodefProvider(BaseCodefProvider):
         return self._normalize_hometax(
             load_fixture("hometax_auth_success.json")
         )
+
+    def get_business_card_purchases(self, business, start_date, end_date):
+        return load_fixture("business_card_purchase_success.json")
+
+    def get_cash_receipt_sales(self, business, start_date, end_date):
+        return load_fixture("cash_receipt_sales_success.json")
+
+    def get_tax_invoice_purchases(self, business, start_date, end_date):
+        return load_fixture("tax_invoice_purchase_success.json")
+
+    def get_tax_invoice_sales(self, business, start_date, end_date):
+        return load_fixture("tax_invoice_sales_success.json")
+
+    def get_credit_card_sales_summary(self, business, start_date, end_date):
+        return load_fixture("credit_card_sales_success.json")
 
     @staticmethod
     def _normalize_hometax(raw):
