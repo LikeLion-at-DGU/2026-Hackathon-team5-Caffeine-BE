@@ -133,3 +133,25 @@ class TaxApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 501)
         self.assertEqual(response.data["code"], "AI_SUGGESTION_NOT_CONFIGURED")
+
+    def test_transaction_sync_rejects_period_overlapping_closed_month(self):
+        MonthlyClose.objects.create(
+            business=self.business,
+            year=2026,
+            month=8,
+            status=MonthlyClose.Status.CLOSED,
+        )
+
+        response = self.client.post(
+            reverse("transaction-sync"),
+            {
+                "business_id": self.business.id,
+                "start_date": "2026-07-15",
+                "end_date": "2026-08-05",
+                "sources": [Transaction.SourceType.CARD_PURCHASE],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["code"], "MONTH_ALREADY_CLOSED")

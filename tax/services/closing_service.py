@@ -44,6 +44,20 @@ class MonthlyCloseService:
             status=MonthlyClose.Status.CLOSED,
         ).exists()
 
+    @staticmethod
+    def has_closed_month_between(*, business_id, start_date, end_date):
+        closed_periods = MonthlyClose.objects.filter(
+            business_id=business_id,
+            status=MonthlyClose.Status.CLOSED,
+            year__gte=start_date.year,
+            year__lte=end_date.year,
+        ).values_list("year", "month")
+        for year, month in closed_periods:
+            month_start, month_end = month_range(year, month)
+            if month_start <= end_date and month_end >= start_date:
+                return True
+        return False
+
     @classmethod
     def build_summary(cls, *, business, year, month):
         start_date, end_date = month_range(year, month)

@@ -45,6 +45,18 @@ class TransactionSyncView(APIView):
             )
 
         params = serializer.validated_data
+        from tax.services.closing_service import MonthlyCloseService
+
+        if MonthlyCloseService.has_closed_month_between(
+            business_id=params["business"].id,
+            start_date=params["start_date"],
+            end_date=params["end_date"],
+        ):
+            return error_response(
+                code="MONTH_ALREADY_CLOSED",
+                message="마감된 월과 겹치는 거래는 다시 동기화할 수 없습니다.",
+                status=409,
+            )
         try:
             result = TransactionSyncService().sync(
                 business=params["business"],
