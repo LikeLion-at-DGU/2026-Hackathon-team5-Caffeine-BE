@@ -12,12 +12,19 @@ class DuplicateDetector:
     MERCHANT_NAME_CONFIDENCE = Decimal("0.8000")
 
     def detect(self, transaction: Transaction) -> list[TransactionDuplicate]:
+        results, _ = self.detect_with_count(transaction)
+        return results
+
+    def detect_with_count(
+        self,
+        transaction: Transaction,
+    ) -> tuple[list[TransactionDuplicate], int]:
         if transaction.cancel_status == Transaction.CancelStatus.CANCELLED:
             TransactionDuplicate.objects.filter(
                 Q(primary_transaction=transaction) | Q(suspected_transaction=transaction),
                 status=TransactionDuplicate.Status.PENDING,
             ).delete()
-            return []
+            return [], 0
 
         candidates = Transaction.objects.filter(
             business=transaction.business,
@@ -39,13 +46,14 @@ class DuplicateDetector:
             matched_by = "merchant_name"
         else:
             self._remove_stale_pending_pairs(transaction, [])
-            return []
+            return [], 0
 
         candidate_ids = list(candidates.values_list("id", flat=True))
         self._remove_stale_pending_pairs(transaction, candidate_ids)
         candidates = candidates.filter(id__in=candidate_ids)
 
         results = []
+        created_count = 0
         for candidate in candidates:
             existing = TransactionDuplicate.objects.filter(
                 Q(primary_transaction=candidate, suspected_transaction=transaction)
@@ -67,7 +75,8 @@ class DuplicateDetector:
                     },
                 )
             )
-        return results
+            created_count += 1
+        return results, created_count
 
     @staticmethod
     def _remove_stale_pending_pairs(transaction, valid_candidate_ids):

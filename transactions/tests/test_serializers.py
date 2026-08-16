@@ -1,3 +1,6 @@
+from datetime import date
+from decimal import Decimal
+
 from django.test import TestCase
 
 from businesses.models import Business
@@ -6,8 +9,10 @@ from transactions.serializers import (
     DuplicateResolutionSerializer,
     TransactionCategoryUpdateSerializer,
     TransactionPurposeUpdateSerializer,
+    TransactionSerializer,
     TransactionSyncRequestSerializer,
 )
+from transactions.services.querysets import with_pending_duplicate_flag
 
 
 class TransactionSerializerContractTests(TestCase):
@@ -69,3 +74,22 @@ class TransactionSerializerContractTests(TestCase):
 
         self.assertFalse(pending.is_valid())
         self.assertTrue(confirmed.is_valid(), confirmed.errors)
+
+    def test_transaction_list_serialization_does_not_query_per_item(self):
+        for index in range(5):
+            Transaction.objects.create(
+                business=self.business,
+                source_type=Transaction.SourceType.CARD_PURCHASE,
+                external_id=f"card-{index}",
+                transaction_type=Transaction.TransactionType.PURCHASE,
+                transaction_date=date(2026, 8, 3),
+                total_amount=Decimal("11000.00"),
+            )
+        queryset = with_pending_duplicate_flag(
+            Transaction.objects.filter(business=self.business)
+        )
+
+        with self.assertNumQueries(1):
+            data = TransactionSerializer(queryset, many=True).data
+
+        self.assertEqual(len(data), 5)

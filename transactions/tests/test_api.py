@@ -41,6 +41,9 @@ class TransactionApiTests(APITestCase):
             total_amount=Decimal("187000.00"),
         )
 
+    def scoped_url(self, name, **kwargs):
+        return f"{reverse(name, kwargs=kwargs)}?business_id={self.business.id}"
+
     def test_list_requires_business_id(self):
         response = self.client.get(reverse("transaction-list"))
 
@@ -62,7 +65,7 @@ class TransactionApiTests(APITestCase):
 
     def test_detail_returns_transaction(self):
         response = self.client.get(
-            reverse("transaction-detail", kwargs={"transaction_id": self.card.id})
+            self.scoped_url("transaction-detail", transaction_id=self.card.id)
         )
 
         self.assertEqual(response.status_code, 200)
@@ -78,6 +81,7 @@ class TransactionApiTests(APITestCase):
             },
         )
         self.assertNotIn("raw_data", response.data["data"])
+        self.assertTrue(response.data["data"]["duplicate"]["is_suspected"])
 
     def test_category_patch_marks_source_as_user(self):
         self.card.classification_confidence = Decimal("0.8000")
@@ -85,7 +89,7 @@ class TransactionApiTests(APITestCase):
         self.card.save()
 
         response = self.client.patch(
-            reverse("transaction-category", kwargs={"transaction_id": self.card.id}),
+            self.scoped_url("transaction-category", transaction_id=self.card.id),
             {"category": Transaction.Category.RAW_MATERIAL},
             format="json",
         )
@@ -98,7 +102,7 @@ class TransactionApiTests(APITestCase):
 
     def test_purpose_patch_marks_source_as_user(self):
         response = self.client.patch(
-            reverse("transaction-purpose", kwargs={"transaction_id": self.card.id}),
+            self.scoped_url("transaction-purpose", transaction_id=self.card.id),
             {"expense_purpose": Transaction.ExpensePurpose.BUSINESS},
             format="json",
         )
@@ -141,12 +145,14 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(item["id"], self.duplicate.id)
         self.assertEqual(item["primary_transaction"]["transaction_id"], self.card.id)
         self.assertEqual(item["suspected_transaction"]["transaction_id"], self.invoice.id)
+        self.assertTrue(item["primary_transaction"]["duplicate"]["is_suspected"])
+        self.assertTrue(item["suspected_transaction"]["duplicate"]["is_suspected"])
 
     def test_duplicate_patch_resolves_status(self):
         response = self.client.patch(
-            reverse(
+            self.scoped_url(
                 "transaction-duplicate-resolution",
-                kwargs={"duplicate_id": self.duplicate.id},
+                duplicate_id=self.duplicate.id,
             ),
             {"status": TransactionDuplicate.Status.CONFIRMED},
             format="json",
@@ -159,9 +165,9 @@ class TransactionApiTests(APITestCase):
 
     def test_duplicate_patch_rejects_pending_status(self):
         response = self.client.patch(
-            reverse(
+            self.scoped_url(
                 "transaction-duplicate-resolution",
-                kwargs={"duplicate_id": self.duplicate.id},
+                duplicate_id=self.duplicate.id,
             ),
             {"status": TransactionDuplicate.Status.PENDING},
             format="json",
@@ -169,3 +175,40 @@ class TransactionApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["code"], "INVALID_DUPLICATE_STATUS")
+
+    def test_detail_requires_business_scope(self):
+        response = self.client.get(
+            reverse("transaction-detail", kwargs={"transaction_id": self.card.id})
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["code"], "INVALID_BUSINESS_SCOPE")
+
+    def test_detail_cannot_read_another_business_transaction(self):
+        other = Business.objects.create(business_name="다른 카페")
+        response = self.client.get(
+            reverse("transaction-detail", kwargs={"transaction_id": self.card.id}),
+            {"business_id": other.id},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data["code"], "TRANSACTION_NOT_FOUND")
+
+    def test_duplicate_resolution_cannot_modify_another_business(self):
+        other = Business.objects.create(business_name="다른 카페")
+        url = (
+            reverse(
+                "transaction-duplicate-resolution",
+                kwargs={"duplicate_id": self.duplicate.id},
+            )
+            + f"?business_id={other.id}"
+        )
+        response = self.client.patch(
+            url,
+            {"status": TransactionDuplicate.Status.CONFIRMED},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.duplicate.refresh_from_db()
+        self.assertEqual(self.duplicate.status, TransactionDuplicate.Status.PENDING)

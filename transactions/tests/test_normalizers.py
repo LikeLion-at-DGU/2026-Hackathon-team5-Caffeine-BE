@@ -11,9 +11,19 @@ from transactions.services.normalizers import (
     normalize_credit_card_sales_summaries,
     normalize_tax_invoices,
 )
+from transactions.services.normalizers.helpers import (
+    TransactionNormalizationError,
+    ensure_success,
+)
 
 
 class CodefTransactionNormalizerTests(SimpleTestCase):
+    def test_missing_result_code_is_rejected(self):
+        with self.assertRaises(TransactionNormalizationError) as context:
+            ensure_success({"result": {"message": "코드 누락"}})
+
+        self.assertIn("MISSING_RESULT_CODE", str(context.exception))
+
     def test_business_card_purchase_fixture_is_normalized_per_usage(self):
         items = normalize_business_card_purchases(
             load_fixture("business_card_purchase_success.json")

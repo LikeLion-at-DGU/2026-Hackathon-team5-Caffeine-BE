@@ -13,9 +13,10 @@ class TransactionNormalizationError(ValueError):
 
 def ensure_success(payload):
     code = str(payload.get("result", {}).get("code", "")).strip()
-    if code and code not in SUCCESS_CODES:
+    if code not in SUCCESS_CODES:
         message = payload.get("result", {}).get("message", "CODEF 거래 조회에 실패했습니다.")
-        raise TransactionNormalizationError(f"{code}: {message}")
+        display_code = code or "MISSING_RESULT_CODE"
+        raise TransactionNormalizationError(f"{display_code}: {message}")
 
 
 def as_list(value):

@@ -1,10 +1,13 @@
 from datetime import date
+from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from businesses.models import Business
+from businesses.models import Business, CodefConnection
+from integrations.codef.base import CodefBusinessAccessError
+from integrations.codef.real import RealCodefProvider
 from transactions.models import MonthlySalesSummary, Transaction
 from transactions.services.sync_service import (
     TransactionSourceMismatchError,
@@ -136,6 +139,55 @@ class TransactionSyncServiceTests(TestCase):
         self.assertEqual(second["created_count"], 0)
         self.assertEqual(second["sales_summary_updated_count"], 1)
         self.assertEqual(MonthlySalesSummary.objects.count(), 1)
+
+    def test_credit_card_sales_summary_rejects_wrong_mock_business(self):
+        other = Business.objects.create(
+            business_name="다른 사업장",
+            business_number="9999999999",
+        )
+
+        with self.assertRaises(TransactionSourceMismatchError):
+            self.service.sync(
+                other,
+                date(2026, 8, 1),
+                date(2026, 8, 31),
+                [MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY],
+            )
+
+    def test_new_duplicate_count_uses_created_events_not_net_table_difference(self):
+        with patch.object(
+            self.service.duplicate_detector,
+            "detect_with_count",
+            return_value=([], 1),
+        ):
+            result = self.service.sync(
+                self.business,
+                date(2026, 8, 1),
+                date(2026, 8, 31),
+                [Transaction.SourceType.CARD_PURCHASE],
+            )
+
+        self.assertEqual(result["new_duplicate_candidate_count"], 12)
+        self.assertEqual(result["duplicate_candidate_total_count"], 0)
+
+    def test_real_summary_access_requires_this_business_hometax_connection(self):
+        provider = RealCodefProvider()
+        with self.assertRaises(CodefBusinessAccessError):
+            provider.ensure_business_access(
+                self.business,
+                MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY,
+            )
+
+        CodefConnection.objects.create(
+            business=self.business,
+            connection_type="HOMETAX",
+            status="CONNECTED",
+        )
+
+        provider.ensure_business_access(
+            self.business,
+            MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY,
+        )
 
 
 @override_settings(CODEF_MODE="mock")

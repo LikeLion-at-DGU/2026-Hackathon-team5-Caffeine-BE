@@ -2,6 +2,7 @@ from collections import Counter
 
 from django.db import transaction as db_transaction
 
+from integrations.codef.base import CodefBusinessAccessError
 from integrations.codef.factory import get_codef_provider
 from transactions.models import MonthlySalesSummary, Transaction, TransactionDuplicate
 
@@ -50,9 +51,14 @@ class TransactionSyncService:
         transaction_updated_count = 0
         sales_summary_created_count = 0
         sales_summary_updated_count = 0
-        duplicates_before = TransactionDuplicate.objects.filter(business=business).count()
+        new_duplicate_candidate_count = 0
 
         for source in sources:
+            try:
+                self.provider.ensure_business_access(business, source)
+            except CodefBusinessAccessError as exc:
+                raise TransactionSourceMismatchError(str(exc)) from exc
+
             if source == MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY:
                 result = self._sync_credit_card_sales_summaries(
                     business,
@@ -86,7 +92,8 @@ class TransactionSyncService:
             for normalized in in_period:
                 saved, created = self.ingestion.save(business, normalized)
                 self._apply_classification(saved, normalized)
-                self.duplicate_detector.detect(saved)
+                _, created_duplicates = self.duplicate_detector.detect_with_count(saved)
+                new_duplicate_candidate_count += created_duplicates
                 category_counts[saved.category] += 1
                 if created:
                     source_created += 1
@@ -123,7 +130,7 @@ class TransactionSyncService:
             "sales_summary_created_count": sales_summary_created_count,
             "sales_summary_updated_count": sales_summary_updated_count,
             "skipped_outside_period_count": skipped_outside_period,
-            "new_duplicate_candidate_count": max(0, duplicates_after - duplicates_before),
+            "new_duplicate_candidate_count": new_duplicate_candidate_count,
             "duplicate_candidate_total_count": duplicates_after,
             "category_counts": dict(category_counts),
         }

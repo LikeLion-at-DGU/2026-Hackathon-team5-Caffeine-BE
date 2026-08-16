@@ -1,4 +1,3 @@
-from django.db.models import Q
 from rest_framework import serializers
 
 from businesses.models import Business
@@ -82,6 +81,13 @@ class DuplicateListQuerySerializer(serializers.Serializer):
     page_size = serializers.IntegerField(min_value=1, max_value=100, default=20)
 
 
+class BusinessScopeQuerySerializer(serializers.Serializer):
+    business_id = serializers.PrimaryKeyRelatedField(
+        source="business",
+        queryset=Business.objects.all(),
+    )
+
+
 class TransactionSerializer(serializers.ModelSerializer):
     transaction_id = serializers.IntegerField(source="id", read_only=True)
     business_id = serializers.IntegerField()
@@ -148,11 +154,7 @@ class TransactionSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def get_duplicate(obj):
-        pending = TransactionDuplicate.objects.filter(
-            Q(primary_transaction=obj) | Q(suspected_transaction=obj),
-            status=TransactionDuplicate.Status.PENDING,
-        ).exists()
-        return {"is_suspected": pending}
+        return {"is_suspected": bool(getattr(obj, "has_pending_duplicate", False))}
 
 
 class TransactionCategoryUpdateSerializer(serializers.Serializer):

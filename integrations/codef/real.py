@@ -1,4 +1,6 @@
-from .base import BaseCodefProvider
+from businesses.models import CodefConnection
+
+from .base import BaseCodefProvider, CodefBusinessAccessError
 
 
 class RealCodefProvider(BaseCodefProvider):
@@ -6,6 +8,29 @@ class RealCodefProvider(BaseCodefProvider):
 
     실제 응답을 MockProvider와 동일한 내부 형식으로 변환해 반환한다.
     """
+
+    SOURCE_CONNECTION_TYPES = {
+        "CARD_PURCHASE": "CARD",
+        "CASH_RECEIPT_PURCHASE": "HOMETAX",
+        "CASH_RECEIPT_SALE": "HOMETAX",
+        "TAX_INVOICE": "HOMETAX",
+        "CREDIT_CARD_SALES_SUMMARY": "HOMETAX",
+    }
+
+    def ensure_business_access(self, business, source_type):
+        connection_type = self.SOURCE_CONNECTION_TYPES.get(source_type)
+        if connection_type is None:
+            raise CodefBusinessAccessError(
+                f"지원하지 않는 CODEF 거래 소스입니다: {source_type}"
+            )
+        if not CodefConnection.objects.filter(
+            business=business,
+            connection_type=connection_type,
+            status="CONNECTED",
+        ).exists():
+            raise CodefBusinessAccessError(
+                f"이 사업장에 연결된 {connection_type} CODEF 계정이 없습니다."
+            )
 
     def get_business_status(self, business_number):
         raise NotImplementedError(

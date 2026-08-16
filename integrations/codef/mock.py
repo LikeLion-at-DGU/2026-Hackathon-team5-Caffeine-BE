@@ -1,7 +1,7 @@
 import json
 import os
 
-from .base import BaseCodefProvider
+from .base import BaseCodefProvider, CodefBusinessAccessError
 
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -21,6 +21,27 @@ def load_fixture(filename):
 
 class MockCodefProvider(BaseCodefProvider):
     """개발 및 테스트용 CODEF Mock Provider."""
+
+    def ensure_business_access(self, business, source_type):
+        requested = "".join(
+            character
+            for character in str(business.business_number or "")
+            if character.isdigit()
+        )
+        fixture_owner = "".join(
+            character
+            for character in str(
+                load_fixture("business_status_success.json").get(
+                    "resCompanyIdentityNo",
+                    "",
+                )
+            )
+            if character.isdigit()
+        )
+        if not requested or requested != fixture_owner:
+            raise CodefBusinessAccessError(
+                "요청 사업장을 현재 Mock 거래 데이터 소유자로 확인할 수 없습니다."
+            )
 
     def get_business_status(self, business_number):
         # 사업자등록상태 조회 성공 상황을 가정한 Mock 응답

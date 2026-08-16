@@ -1,5 +1,6 @@
 import math
 
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.views import APIView
 
@@ -8,6 +9,7 @@ from .responses import error_response, success_response
 from .serializers import (
     DuplicateListQuerySerializer,
     DuplicateResolutionSerializer,
+    BusinessScopeQuerySerializer,
     TransactionCategoryUpdateSerializer,
     TransactionDuplicateSerializer,
     TransactionListQuerySerializer,
@@ -16,13 +18,23 @@ from .serializers import (
     TransactionSyncRequestSerializer,
 )
 from .services.normalizers.helpers import TransactionNormalizationError
+from .services.querysets import with_pending_duplicate_flag
 from .services.sync_service import TransactionSourceMismatchError, TransactionSyncService
 
 
-def _paginated_data(queryset, serializer_class, *, page, page_size):
+def _paginated_data(
+    queryset,
+    serializer_class,
+    *,
+    page,
+    page_size,
+    prepare_items=None,
+):
     total_count = queryset.count()
     offset = (page - 1) * page_size
-    items = queryset[offset : offset + page_size]
+    items = list(queryset[offset : offset + page_size])
+    if prepare_items is not None:
+        prepare_items(items)
     return {
         "items": serializer_class(items, many=True).data,
         "pagination": {
@@ -32,6 +44,44 @@ def _paginated_data(queryset, serializer_class, *, page, page_size):
             "total_pages": math.ceil(total_count / page_size),
         },
     }
+
+
+def _business_scope(request):
+    query = BusinessScopeQuerySerializer(data=request.query_params)
+    if not query.is_valid():
+        return None, error_response(
+            code="INVALID_BUSINESS_SCOPE",
+            message="business_id가 필요하거나 올바르지 않습니다.",
+            errors=query.errors,
+        )
+    return query.validated_data["business"], None
+
+
+def _mark_duplicate_relations(items):
+    transaction_ids = {
+        transaction_id
+        for item in items
+        for transaction_id in (
+            item.primary_transaction_id,
+            item.suspected_transaction_id,
+        )
+    }
+    pending_ids = set()
+    pending_pairs = TransactionDuplicate.objects.filter(
+        Q(primary_transaction_id__in=transaction_ids)
+        | Q(suspected_transaction_id__in=transaction_ids),
+        status=TransactionDuplicate.Status.PENDING,
+    ).values_list("primary_transaction_id", "suspected_transaction_id")
+    for primary_id, suspected_id in pending_pairs:
+        pending_ids.update((primary_id, suspected_id))
+
+    for item in items:
+        item.primary_transaction.has_pending_duplicate = (
+            item.primary_transaction_id in pending_ids
+        )
+        item.suspected_transaction.has_pending_duplicate = (
+            item.suspected_transaction_id in pending_ids
+        )
 
 
 class TransactionSyncView(APIView):
@@ -85,7 +135,9 @@ class TransactionListView(APIView):
             )
 
         params = query.validated_data
-        queryset = Transaction.objects.filter(business=params["business"])
+        queryset = with_pending_duplicate_flag(
+            Transaction.objects.filter(business=params["business"])
+        )
         if params.get("start_date"):
             queryset = queryset.filter(transaction_date__gte=params["start_date"])
         if params.get("end_date"):
@@ -109,7 +161,12 @@ class TransactionListView(APIView):
 
 class TransactionDetailView(APIView):
     def get(self, request, transaction_id):
-        transaction = Transaction.objects.filter(id=transaction_id).first()
+        business, error = _business_scope(request)
+        if error:
+            return error
+        transaction = with_pending_duplicate_flag(
+            Transaction.objects.filter(id=transaction_id, business=business)
+        ).first()
         if transaction is None:
             return error_response(
                 code="TRANSACTION_NOT_FOUND",
@@ -125,7 +182,13 @@ class TransactionDetailView(APIView):
 
 class TransactionCategoryView(APIView):
     def patch(self, request, transaction_id):
-        transaction = Transaction.objects.filter(id=transaction_id).first()
+        business, error = _business_scope(request)
+        if error:
+            return error
+        transaction = Transaction.objects.filter(
+            id=transaction_id,
+            business=business,
+        ).first()
         if transaction is None:
             return error_response(
                 code="TRANSACTION_NOT_FOUND",
@@ -152,6 +215,9 @@ class TransactionCategoryView(APIView):
                 "updated_at",
             ]
         )
+        transaction = with_pending_duplicate_flag(
+            Transaction.objects.filter(pk=transaction.pk)
+        ).get()
         return success_response(
             code="TRANSACTION_CATEGORY_UPDATED",
             message="거래 카테고리를 수정했습니다.",
@@ -161,7 +227,13 @@ class TransactionCategoryView(APIView):
 
 class TransactionPurposeView(APIView):
     def patch(self, request, transaction_id):
-        transaction = Transaction.objects.filter(id=transaction_id).first()
+        business, error = _business_scope(request)
+        if error:
+            return error
+        transaction = Transaction.objects.filter(
+            id=transaction_id,
+            business=business,
+        ).first()
         if transaction is None:
             return error_response(
                 code="TRANSACTION_NOT_FOUND",
@@ -186,6 +258,9 @@ class TransactionPurposeView(APIView):
                 "updated_at",
             ]
         )
+        transaction = with_pending_duplicate_flag(
+            Transaction.objects.filter(pk=transaction.pk)
+        ).get()
         return success_response(
             code="TRANSACTION_PURPOSE_UPDATED",
             message="거래의 지출 목적을 수정했습니다.",
@@ -213,6 +288,7 @@ class TransactionDuplicateListView(APIView):
             TransactionDuplicateSerializer,
             page=params["page"],
             page_size=params["page_size"],
+            prepare_items=_mark_duplicate_relations,
         )
         return success_response(
             code="TRANSACTION_DUPLICATE_LIST_SUCCESS",
@@ -223,7 +299,13 @@ class TransactionDuplicateListView(APIView):
 
 class TransactionDuplicateResolutionView(APIView):
     def patch(self, request, duplicate_id):
-        duplicate = TransactionDuplicate.objects.filter(id=duplicate_id).first()
+        business, error = _business_scope(request)
+        if error:
+            return error
+        duplicate = TransactionDuplicate.objects.filter(
+            id=duplicate_id,
+            business=business,
+        ).first()
         if duplicate is None:
             return error_response(
                 code="TRANSACTION_DUPLICATE_NOT_FOUND",
@@ -242,6 +324,7 @@ class TransactionDuplicateResolutionView(APIView):
         duplicate.status = serializer.validated_data["status"]
         duplicate.resolved_at = timezone.now()
         duplicate.save(update_fields=["status", "resolved_at", "updated_at"])
+        _mark_duplicate_relations([duplicate])
         return success_response(
             code="TRANSACTION_DUPLICATE_RESOLVED",
             message="중복 여부를 확정했습니다.",
