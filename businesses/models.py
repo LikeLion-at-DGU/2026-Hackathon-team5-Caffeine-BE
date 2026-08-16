@@ -1,6 +1,5 @@
 from django.db import models
 
-
 class Business(models.Model):
     """사업장 기본 정보와 과세유형 상태를 갖는다.
 
