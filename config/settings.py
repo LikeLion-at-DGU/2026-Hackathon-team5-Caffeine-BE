@@ -47,7 +47,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'payroll',
     'businesses',
-    "transactions",
+    'analytics',
+    'transactions',
     'settings',
 ]
 
