@@ -15,7 +15,7 @@ class CodefAuthTests(APITestCase):
         url = reverse("business-codef-auth", kwargs={"pk": self.business.id})
         res = self.client.post(url, {"connection_type": "HOMETAX"}, format="json")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data["status"], "AUTH_REQUIRED")
+        self.assertEqual(res.data["data"]["status"], "AUTH_REQUIRED")
 
         conn = CodefConnection.objects.get(business=self.business, connection_type="HOMETAX")
         self.assertTrue(conn.continue_2way)
@@ -26,7 +26,7 @@ class CodefAuthTests(APITestCase):
         url = reverse("business-codef-auth", kwargs={"pk": self.business.id})
         res = self.client.post(url, {"connection_type": "CARD"}, format="json")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data["status"], "CONNECTED")
+        self.assertEqual(res.data["data"]["status"], "CONNECTED")
 
         conn = CodefConnection.objects.get(business=self.business, connection_type="CARD")
         self.assertTrue(conn.connected_id)
@@ -40,7 +40,7 @@ class CodefAuthTests(APITestCase):
             res = self.client.post(url, {"connection_type": "HOMETAX"}, format="json")
 
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data["status"], "FAILED")
+        self.assertEqual(res.data["data"]["status"], "FAILED")
         conn = CodefConnection.objects.get(business=business, connection_type="HOMETAX")
         self.assertEqual(conn.status, "FAILED")
         self.assertEqual(conn.last_error_code, "MOCK-90000")
@@ -61,12 +61,12 @@ class CodefAuthTests(APITestCase):
         self.assertEqual(conn.status, "AUTH_REQUIRED")
         self.assertEqual(conn.last_error_code, "")
         self.assertEqual(conn.last_error_message, "")
-        
+
     def test_status_always_shows_both_types_with_disconnected_default(self):
         # 아직 아무 인증도 안 한 상태에서도 CARD/HOMETAX 둘 다 응답에 나와야 함
         url = reverse("business-codef-auth-status", kwargs={"pk": self.business.id})
         res = self.client.get(url)
-        types = {c["type"]: c["status"] for c in res.data["connections"]}
+        types = {c["type"]: c["status"] for c in res.data["data"]["connections"]}
         self.assertEqual(types, {"CARD": "DISCONNECTED", "HOMETAX": "DISCONNECTED"})
 
     def test_status_shows_both_connections_after_auth(self):
@@ -77,17 +77,17 @@ class CodefAuthTests(APITestCase):
 
         url = reverse("business-codef-auth-status", kwargs={"pk": self.business.id})
         res = self.client.get(url)
-        types = {c["type"]: c["status"] for c in res.data["connections"]}
+        types = {c["type"]: c["status"] for c in res.data["data"]["connections"]}
         self.assertEqual(types["CARD"], "CONNECTED")
         self.assertEqual(types["HOMETAX"], "AUTH_REQUIRED")
-    
+
     def test_retry_moves_to_connected(self):
         self.client.post(reverse("business-codef-auth", kwargs={"pk": self.business.id}),
                           {"connection_type": "HOMETAX"}, format="json")
         url = reverse("business-codef-auth-retry", kwargs={"pk": self.business.id})
         res = self.client.post(url, {"connection_type": "HOMETAX"}, format="json")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data["status"], "CONNECTED")
+        self.assertEqual(res.data["data"]["status"], "CONNECTED")
 
         # 연결되고 나면 2-way 임시 데이터는 정리돼야 함
         conn = CodefConnection.objects.get(business=self.business, connection_type="HOMETAX")
@@ -122,7 +122,7 @@ class CodefAuthTests(APITestCase):
             res = self.client.post(url, {"connection_type": "HOMETAX"}, format="json")
 
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data["status"], "FAILED")
+        self.assertEqual(res.data["data"]["status"], "FAILED")
         conn.refresh_from_db()
         self.assertEqual(conn.status, "FAILED")
         self.assertEqual(conn.last_error_code, "CF-99999")
