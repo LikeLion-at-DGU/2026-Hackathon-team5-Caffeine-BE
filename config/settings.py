@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'analytics',
     'transactions',
     'settings',
+    "reports",
 ]
 
 MIDDLEWARE = [
