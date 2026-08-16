@@ -20,6 +20,7 @@ class Business(models.Model):
     tax_type_changed_date = models.DateField(null=True, blank=True)
     is_demo = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
+    tax_accountant_email = models.EmailField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.business_name} ({self.id})"
