@@ -43,6 +43,10 @@ class ChatApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.data["data"]["answer"],
+            response.data["data"]["assistant_message"]["content"],
+        )
         self.assertEqual(response.data["code"], "CHAT_MESSAGE_CREATED")
         data = response.data["data"]
         self.assertEqual(data["user_message"]["role"], ChatMessage.Role.USER)

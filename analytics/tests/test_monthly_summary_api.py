@@ -30,7 +30,7 @@ class MonthlySummaryAPITests(TestCase):
         self.assertEqual(data["payroll_employee_count"], 1)
         self.assertEqual(data["payroll_withholding_tax"], 8_734)
 
-    def test_summary_pending_vat_fields_are_null(self):
+    def test_summary_keeps_vat_empty_for_unknown_tax_type_and_calculates_trend(self):
         response = self.client.get(self.url, {"year": 2026, "month": 8})
 
         data = response.data["data"]
@@ -38,7 +38,7 @@ class MonthlySummaryAPITests(TestCase):
         self.assertIsNone(data["vat_breakdown"])
         self.assertIsNone(data["sales_change_rate"])
         self.assertIsNone(data["expense_change_rate"])
-        self.assertIsNone(data["top_increasing_category"])
+        self.assertEqual(data["top_increasing_category"], "LABOR")
 
     def test_summary_missing_period_returns_400(self):
         response = self.client.get(self.url)

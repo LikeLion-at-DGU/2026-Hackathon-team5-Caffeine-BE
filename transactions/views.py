@@ -317,7 +317,9 @@ class TransactionDuplicateListView(APIView):
         params = query.validated_data
         queryset = TransactionDuplicate.objects.select_related(
             "primary_transaction",
+            "primary_transaction__deduction_review",
             "suspected_transaction",
+            "suspected_transaction__deduction_review",
         ).filter(business=params["business"], status=params["status"])
         data = _paginated_data(
             queryset,

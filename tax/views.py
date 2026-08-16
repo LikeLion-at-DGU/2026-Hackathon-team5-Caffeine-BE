@@ -11,6 +11,7 @@ from .serializers import (
     DeductionConfirmSerializer,
     DeductionListQuerySerializer,
     DeductionReviewSerializer,
+    TaxBusinessScopeSerializer,
 )
 from .services.closing_service import (
     MonthAlreadyClosed,
@@ -18,6 +19,7 @@ from .services.closing_service import (
     UnconfirmedTransactionsExist,
 )
 from .services.deduction_service import DeductionReviewService
+from .services.deduction_breakdown_service import build_deduction_breakdown
 from .services.periods import month_range, parse_year_month
 from .services.querysets import effective_purchase_transactions
 from .services.vat_service import UnsupportedTaxType, VatForecastService
@@ -29,6 +31,28 @@ def _invalid_query(serializer, code="INVALID_PERIOD"):
         message="조회 조건이 올바르지 않습니다.",
         errors=serializer.errors,
     )
+
+
+def _period_query_data(request):
+    data = request.query_params.copy()
+    if not data.get("year_month") and data.get("year") and data.get("month"):
+        try:
+            data["year_month"] = f'{int(data["year"]):04d}-{int(data["month"]):02d}'
+        except (TypeError, ValueError):
+            pass
+    return data
+
+
+def _business_scope(request):
+    business_id = request.data.get("business_id") or request.query_params.get("business_id")
+    serializer = TaxBusinessScopeSerializer(data={"business_id": business_id})
+    if not serializer.is_valid():
+        return None, error_response(
+            code="INVALID_BUSINESS_SCOPE",
+            message="business_id가 필요하거나 올바르지 않습니다.",
+            errors=serializer.errors,
+        )
+    return serializer.validated_data["business"], None
 
 
 class DeductionListView(APIView):
@@ -73,8 +97,12 @@ class DeductionListView(APIView):
 
 class DeductionConfirmView(APIView):
     def patch(self, request, transaction_id):
+        business, error = _business_scope(request)
+        if error:
+            return error
         transaction = Transaction.objects.filter(
             id=transaction_id,
+            business=business,
             transaction_type=Transaction.TransactionType.PURCHASE,
         ).first()
         if transaction is None:
@@ -114,8 +142,12 @@ class DeductionConfirmView(APIView):
 
 class DeductionAiSuggestView(APIView):
     def post(self, request, transaction_id):
+        business, error = _business_scope(request)
+        if error:
+            return error
         if not Transaction.objects.filter(
             id=transaction_id,
+            business=business,
             transaction_type=Transaction.TransactionType.PURCHASE,
         ).exists():
             return error_response(
@@ -132,7 +164,7 @@ class DeductionAiSuggestView(APIView):
 
 class VatForecastView(APIView):
     def get(self, request):
-        query = BusinessPeriodQuerySerializer(data=request.query_params)
+        query = BusinessPeriodQuerySerializer(data=_period_query_data(request))
         if not query.is_valid():
             return _invalid_query(query)
         params = query.validated_data
@@ -152,6 +184,25 @@ class VatForecastView(APIView):
         return success_response(
             code="VAT_FORECAST_SUCCESS",
             message="예상 부가세를 조회했습니다.",
+            data=data,
+        )
+
+
+class DeductionBreakdownView(APIView):
+    def get(self, request):
+        query = BusinessPeriodQuerySerializer(data=_period_query_data(request))
+        if not query.is_valid():
+            return _invalid_query(query, "INVALID_DEDUCTION_BREAKDOWN_QUERY")
+        params = query.validated_data
+        year, month = parse_year_month(params["year_month"])
+        data = build_deduction_breakdown(
+            business=params["business"],
+            year=year,
+            month=month,
+        )
+        return success_response(
+            code="DEDUCTION_BREAKDOWN_SUCCESS",
+            message="부가세 공제 구조를 조회했습니다.",
             data=data,
         )
 

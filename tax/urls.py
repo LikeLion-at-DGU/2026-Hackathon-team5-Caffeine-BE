@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     DeductionAiSuggestView,
+    DeductionBreakdownView,
     DeductionConfirmView,
     DeductionListView,
     MonthlyCloseApproveView,
@@ -23,6 +24,11 @@ urlpatterns = [
         name="tax-deduction-confirm",
     ),
     path("vat-forecast/", VatForecastView.as_view(), name="tax-vat-forecast"),
+    path(
+        "deduction-breakdown/",
+        DeductionBreakdownView.as_view(),
+        name="tax-deduction-breakdown",
+    ),
     path(
         "closing/<str:year_month>/",
         MonthlyCloseDetailView.as_view(),

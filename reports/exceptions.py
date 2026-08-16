@@ -36,3 +36,21 @@ class TaxAccountantEmailNotSet(ReportServiceError):
     code = "TAX_ACCOUNTANT_EMAIL_NOT_SET"
     message = "세무사 이메일이 등록되어 있지 않습니다."
     status_code = status.HTTP_400_BAD_REQUEST
+
+
+class InvalidReportPeriod(ReportServiceError):
+    code = "INVALID_YEAR_MONTH"
+    message = "보고서 대상 월은 YYYY-MM 형식이어야 합니다."
+    status_code = status.HTTP_400_BAD_REQUEST
+
+
+class InvalidReportFileType(ReportServiceError):
+    code = "INVALID_REPORT_FILE_TYPE"
+    message = "보고서 파일 형식은 csv 또는 pdf만 지원합니다."
+    status_code = status.HTTP_400_BAD_REQUEST
+
+
+class MonthlyCloseRequired(ReportServiceError):
+    code = "MONTHLY_CLOSE_REQUIRED"
+    message = "월 마감 승인 후 보고서를 생성할 수 있습니다."
+    status_code = status.HTTP_409_CONFLICT

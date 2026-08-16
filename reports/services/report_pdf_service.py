@@ -10,6 +10,7 @@ from reportlab.pdfgen import canvas
 from payroll.models import Employee
 
 from .data_aggregation_service import (
+    get_deemed_purchase_deductions,
     get_labor_cost_statements,
     get_purchase_evidences,
     get_sales_invoices,
@@ -26,23 +27,26 @@ def generate_report_pdf(business, year_month):
     c = canvas.Canvas(buffer, pagesize=A4)
     y = 800
 
-    c.setFont(FONT_NAME, 14)
-    c.drawString(50, y, f"{year_month} 세무사 전달용 자료 - {business.business_name}")
-    y -= 30
-    c.setFont(FONT_NAME, 11)
+    def draw_line(text, x=50, font_size=11, gap=15):
+        nonlocal y
+        if y < 55:
+            c.showPage()
+            c.setFont(FONT_NAME, 11)
+            y = 800
+        c.setFont(FONT_NAME, font_size)
+        c.drawString(x, y, text)
+        y -= gap
 
-    c.drawString(50, y, "[매출 세금계산서]")
-    y -= 15
+    draw_line(f"{year_month} 세무사 전달용 자료 - {business.business_name}", font_size=14, gap=30)
+
+    draw_line("[매출 세금계산서]")
     for tx in get_sales_invoices(business, year_month):
-        c.drawString(60, y, f"{tx.transaction_date} {tx.merchant_name} {tx.total_amount}원")
-        y -= 15
+        draw_line(f"{tx.transaction_date} {tx.merchant_name} {tx.total_amount}원", x=60)
     y -= 10
 
-    c.drawString(50, y, "[매입 증빙]")
-    y -= 15
+    draw_line("[매입 증빙]")
     for tx in get_purchase_evidences(business, year_month):
-        c.drawString(60, y, f"{tx.transaction_date} {tx.merchant_name} {tx.total_amount}원")
-        y -= 15
+        draw_line(f"{tx.transaction_date} {tx.merchant_name} {tx.total_amount}원", x=60)
     y -= 10
 
     payments = list(get_labor_cost_statements(business, year_month))
@@ -50,12 +54,23 @@ def generate_report_pdf(business, year_month):
         rows = [p for p in payments if p.employee.employment_type == emp_type]
         if not rows:
             continue
-        c.drawString(50, y, f"[인건비 - {label}]")
-        y -= 15
+        draw_line(f"[인건비 - {label}]")
         for p in rows:
-            c.drawString(60, y, f"{p.employee.name} 지급액 {p.gross_pay}원 / 원천징수 {p.withholding_tax}원")
-            y -= 15
+            draw_line(
+                f"{p.employee.name} 지급액 {p.gross_pay}원 / 원천징수 {p.withholding_tax}원",
+                x=60,
+            )
         y -= 10
+
+    deemed_candidates = list(get_deemed_purchase_deductions(business, year_month))
+    if deemed_candidates:
+        draw_line("[의제매입 검토 후보]")
+        for review in deemed_candidates:
+            tx = review.transaction
+            draw_line(
+                f"{tx.transaction_date} {tx.merchant_name} {tx.total_amount}원 (공제율 적용 전)",
+                x=60,
+            )
 
     c.showPage()
     c.save()

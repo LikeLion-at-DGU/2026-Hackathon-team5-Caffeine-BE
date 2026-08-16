@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.db.models import Count, Sum
 
+from analytics.services.monthly_summary_service import get_monthly_tax_summary
 from transactions.models import Transaction
 
 from tax.models import DeductionReview
@@ -46,7 +47,11 @@ class RuleBasedChatResponder:
         if any(keyword in normalized for keyword in self.VAT_KEYWORDS):
             return self._vat_reply(business=business, year=year, month=month)
         if any(keyword in normalized for keyword in self.ANALYTICS_KEYWORDS):
-            return self._analytics_pending_reply(year=year, month=month)
+            return self._analytics_reply(
+                business=business,
+                year=year,
+                month=month,
+            )
         if any(keyword in normalized for keyword in self.TRANSACTION_KEYWORDS):
             return self._transaction_reply(business=business, year=year, month=month)
         return ChatReply(
@@ -175,16 +180,37 @@ class RuleBasedChatResponder:
         )
 
     @staticmethod
-    def _analytics_pending_reply(*, year, month):
+    def _analytics_reply(*, business, year, month):
+        summary = get_monthly_tax_summary(business.id, year, month)
+        change_parts = []
+        if summary["sales_change_rate"] is not None:
+            change_parts.append(f"매출은 전월 대비 {summary['sales_change_rate']:+.1f}%")
+        if summary["expense_change_rate"] is not None:
+            change_parts.append(f"지출은 전월 대비 {summary['expense_change_rate']:+.1f}%")
+        if not change_parts:
+            change_sentence = "전월 데이터가 없어 증감률은 아직 계산할 수 없습니다."
+        else:
+            change_sentence = ", ".join(change_parts) + "입니다."
+        if summary["top_increasing_category"]:
+            change_sentence += (
+                f" 가장 많이 증가한 지출 항목은 {summary['top_increasing_category']}입니다."
+            )
         return ChatReply(
             content=(
-                f"{year}년 {month}월의 전월 대비 변화와 비용 비율은 Analytics 연결 후 제공됩니다. "
-                "현재 Chat이 임의로 증감률을 계산하지 않도록 분리해 두었습니다."
+                f"{year}년 {month}월 총 매출은 {_won(summary['total_sales'])}, "
+                f"총 지출은 {_won(summary['total_expense'])}입니다. {change_sentence}"
             ),
             metadata={
                 "intent": "ANALYTICS",
                 "year_month": f"{year:04d}-{month:02d}",
-                "sources": [],
-                "analytics_available": False,
+                "sources": ["ANALYTICS"],
+                "analytics_available": True,
+                "summary": {
+                    "total_sales": summary["total_sales"],
+                    "total_expense": summary["total_expense"],
+                    "sales_change_rate": summary["sales_change_rate"],
+                    "expense_change_rate": summary["expense_change_rate"],
+                    "top_increasing_category": summary["top_increasing_category"],
+                },
             },
         )

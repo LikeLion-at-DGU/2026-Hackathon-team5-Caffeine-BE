@@ -41,6 +41,7 @@ class ChatMessageView(APIView):
             code="CHAT_MESSAGE_CREATED",
             message="카페비서가 질문에 답변했습니다.",
             data={
+                "answer": assistant_message.content,
                 "user_message": ChatMessageSerializer(user_message).data,
                 "assistant_message": ChatMessageSerializer(assistant_message).data,
             },

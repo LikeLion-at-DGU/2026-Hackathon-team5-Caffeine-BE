@@ -25,6 +25,13 @@ class BusinessPeriodQuerySerializer(serializers.Serializer):
     year_month = YearMonthField()
 
 
+class TaxBusinessScopeSerializer(serializers.Serializer):
+    business_id = serializers.PrimaryKeyRelatedField(
+        source="business",
+        queryset=Business.objects.all(),
+    )
+
+
 class DeductionListQuerySerializer(BusinessPeriodQuerySerializer):
     suggested_status = serializers.ChoiceField(
         choices=DeductionReview.SuggestedStatus.choices,

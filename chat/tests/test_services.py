@@ -65,7 +65,7 @@ class ChatServiceTests(TestCase):
         self.assertEqual(reply.metadata["intent"], "DEDUCTION_STATUS")
         self.assertEqual(reply.metadata["counts"]["unconfirmed"], 1)
 
-    def test_analytics_question_does_not_duplicate_analytics_calculation(self):
+    def test_analytics_question_uses_analytics_service_result(self):
         reply = RuleBasedChatResponder().reply(
             business=self.business,
             message="비용이 지난달보다 왜 늘었어?",
@@ -74,7 +74,8 @@ class ChatServiceTests(TestCase):
         )
 
         self.assertEqual(reply.metadata["intent"], "ANALYTICS")
-        self.assertFalse(reply.metadata["analytics_available"])
+        self.assertTrue(reply.metadata["analytics_available"])
+        self.assertIn("총 지출", reply.content)
 
     def test_send_message_persists_user_and_assistant_pair(self):
         user_message, assistant_message = ChatService.send_message(

@@ -54,7 +54,10 @@ class TaxApiTests(APITestCase):
     def test_confirm_deduction(self):
         response = self.client.patch(
             reverse("tax-deduction-confirm", kwargs={"transaction_id": self.purchase.id}),
-            {"confirmed_status": DeductionReview.ConfirmedStatus.DEDUCTIBLE},
+            {
+                "business_id": self.business.id,
+                "confirmed_status": DeductionReview.ConfirmedStatus.DEDUCTIBLE,
+            },
             format="json",
         )
 
@@ -116,7 +119,8 @@ class TaxApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
 
         edit_response = self.client.patch(
-            reverse("transaction-category", kwargs={"transaction_id": self.purchase.id}),
+            f'{reverse("transaction-category", kwargs={"transaction_id": self.purchase.id})}'
+            f'?business_id={self.business.id}',
             {"category": Transaction.Category.RAW_MATERIAL},
             format="json",
         )
@@ -127,12 +131,26 @@ class TaxApiTests(APITestCase):
     def test_ai_endpoint_is_explicitly_disabled(self):
         response = self.client.post(
             reverse("tax-deduction-ai-suggest", kwargs={"transaction_id": self.purchase.id}),
-            {},
+            {"business_id": self.business.id},
             format="json",
         )
 
         self.assertEqual(response.status_code, 501)
         self.assertEqual(response.data["code"], "AI_SUGGESTION_NOT_CONFIGURED")
+
+    def test_deduction_breakdown_is_served_by_tax(self):
+        DeductionReview.objects.create(
+            transaction=self.purchase,
+            confirmed_status=DeductionReview.ConfirmedStatus.DEDUCTIBLE,
+        )
+        response = self.client.get(
+            reverse("tax-deduction-breakdown"),
+            {"business_id": self.business.id, "year": 2026, "month": 8},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["code"], "DEDUCTION_BREAKDOWN_SUCCESS")
+        self.assertEqual(response.data["data"]["normal_input_vat"], 10000)
 
     def test_transaction_sync_rejects_period_overlapping_closed_month(self):
         MonthlyClose.objects.create(
