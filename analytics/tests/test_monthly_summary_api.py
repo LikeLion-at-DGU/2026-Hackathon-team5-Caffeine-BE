@@ -115,10 +115,20 @@ class MonthlySummaryWithTransactionsAPITests(TestCase):
         breakdown = response.data["data"]["expense_breakdown"]
         categories = {item["category"]: item["amount"] for item in breakdown}
 
-        self.assertEqual(categories["재료비"], 300000)
-        self.assertIn("인건비", categories)
-        # 개인지출(999,999원)이나 취소건이 재료비에 섞이면 안 됨
-        self.assertEqual(categories["재료비"], 300000)
+        self.assertEqual(categories["RAW_MATERIAL"], 300_000)
+        self.assertIn("LABOR", categories)
+        # 개인지출(999,999원)이나 취소건이 원재료비에 섞이면 안 됨
+        self.assertEqual(categories["RAW_MATERIAL"], 300_000)
+
+    def test_expense_breakdown_includes_korean_label(self):
+        response = self.client.get(self.url, {"year": 2026, "month": 8})
+
+        breakdown = response.data["data"]["expense_breakdown"]
+        raw_material = next(item for item in breakdown if item["category"] == "RAW_MATERIAL")
+        labor = next(item for item in breakdown if item["category"] == "LABOR")
+
+        self.assertEqual(raw_material["label"], "원재료")
+        self.assertEqual(labor["label"], "인건비")
 
     def test_total_expense_includes_payroll_and_transactions(self):
         response = self.client.get(self.url, {"year": 2026, "month": 8})
