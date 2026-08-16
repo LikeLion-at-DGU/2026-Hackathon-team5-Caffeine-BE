@@ -9,6 +9,7 @@ class Business(models.Model):
     """
 
     business_name = models.CharField(max_length=100)
+    representative_name = models.CharField(max_length=50, blank=True) #추가
     business_number = models.CharField(max_length=20, blank=True, null=True)
     industry_code = models.CharField(max_length=20, blank=True)
     business_type = models.CharField(max_length=100, blank=True)  # 업태
