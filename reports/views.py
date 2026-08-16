@@ -54,7 +54,12 @@ class ReportDownloadView(APIView):
             return _error_response(e.code, e.message, e.status_code)
 
         content_type = "text/csv" if file_type == "csv" else "application/pdf"
-        response = HttpResponse(file_field.read(), content_type=content_type)
+        file_field.open("rb")
+        try:
+            file_content = file_field.read()
+        finally:
+            file_field.close()
+        response = HttpResponse(file_content, content_type=content_type)
         filename = file_field.name.split("/")[-1]
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response

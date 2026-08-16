@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
+import sys
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -66,8 +67,22 @@ INSTALLED_APPS = [
     "chat",
 ]
 
-# 실제 LLM을 연결할 때 이 경로만 교체하면 API와 대화 이력 모델은 그대로 유지된다.
-CHAT_RESPONDER_CLASS = "chat.services.responder.RuleBasedChatResponder"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.6-luna").strip()
+OPENAI_TIMEOUT_SECONDS = float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "20"))
+OPENAI_MAX_OUTPUT_TOKENS = int(os.environ.get("OPENAI_MAX_OUTPUT_TOKENS", "1200"))
+OPENAI_REASONING_EFFORT = os.environ.get("OPENAI_REASONING_EFFORT", "none").strip()
+
+# 로컬/운영은 키가 있으면 OpenAI를 사용하고, 테스트는 실제 유료 호출을 차단한다.
+_default_chat_responder = (
+    "chat.services.openai_responder.OpenAIChatResponder"
+    if OPENAI_API_KEY and "test" not in sys.argv
+    else "chat.services.responder.RuleBasedChatResponder"
+)
+CHAT_RESPONDER_CLASS = (
+    os.environ.get("CHAT_RESPONDER_CLASS", "").strip()
+    or _default_chat_responder
+)
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

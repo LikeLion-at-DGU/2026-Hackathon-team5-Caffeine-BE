@@ -27,4 +27,5 @@ class TrendQuerySerializer(serializers.Serializer):
 
 
 class AnalyticsExportQuerySerializer(AnalyticsPeriodQuerySerializer):
-    format = serializers.ChoiceField(choices=["csv", "pdf"], default="csv")
+    # DRF가 GET 쿼리의 `format`을 렌더러 선택 예약어로 사용하므로 별도 이름을 쓴다.
+    file_type = serializers.ChoiceField(choices=["csv", "pdf"], default="csv")
