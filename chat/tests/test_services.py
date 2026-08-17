@@ -1,6 +1,8 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import Mock, patch
 
+from django.db import connection
 from django.test import TestCase
 
 from businesses.models import Business
@@ -10,7 +12,7 @@ from tax.models import DeductionReview
 
 from chat.models import ChatMessage
 from chat.services.chat_service import ChatService
-from chat.services.responder import RuleBasedChatResponder
+from chat.services.responder import ChatReply, RuleBasedChatResponder
 
 
 class ChatServiceTests(TestCase):
@@ -89,3 +91,25 @@ class ChatServiceTests(TestCase):
         self.assertEqual(assistant_message.reply_to, user_message)
         self.assertEqual(assistant_message.metadata["responder"], "RULE_BASED")
         self.assertEqual(assistant_message.metadata["intent"], "TRANSACTION_SUMMARY")
+
+    def test_responder_runs_outside_database_transaction(self):
+        responder = Mock(name="EXTERNAL_RESPONDER")
+        baseline_atomic_depth = len(connection.atomic_blocks)
+
+        def reply(**kwargs):
+            # TestCase 자체의 격리용 atomic 외에 서비스가 추가 atomic을 열지 않아야 한다.
+            self.assertEqual(len(connection.atomic_blocks), baseline_atomic_depth)
+            return ChatReply(content="외부 응답", metadata={"intent": "TEST"})
+
+        responder.reply.side_effect = reply
+        responder.name = "EXTERNAL_RESPONDER"
+        with patch.object(ChatService, "get_responder", return_value=responder):
+            user_message, assistant_message = ChatService.send_message(
+                business=self.business,
+                content="외부 호출 테스트",
+                year=2026,
+                month=8,
+            )
+
+        self.assertEqual(assistant_message.reply_to, user_message)
+        self.assertEqual(assistant_message.metadata["responder"], "EXTERNAL_RESPONDER")

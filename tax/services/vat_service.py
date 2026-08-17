@@ -7,7 +7,7 @@ from transactions.models import MonthlySalesSummary, Transaction
 from ..models import DeductionReview
 from .deduction_service import DeductionReviewService
 from .periods import month_range
-from .querysets import effective_transactions
+from transactions.services.querysets import effective_transactions
 
 
 ZERO = Decimal("0.00")

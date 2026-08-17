@@ -17,7 +17,7 @@ from django.db.models import Sum
 from businesses.models import Business
 from payroll.services.payment_service import get_monthly_summary as get_payroll_summary
 from transactions.models import MonthlySalesSummary, Transaction
-from tax.services.querysets import effective_transactions
+from transactions.services.querysets import effective_transactions
 from tax.services.vat_service import UnsupportedTaxType, VatForecastService
 
 _LABOR_CATEGORY_CODE = "LABOR"

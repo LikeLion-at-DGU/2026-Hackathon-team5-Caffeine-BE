@@ -31,10 +31,13 @@ SECRET_KEY = 'django-insecure-5l()ew9)0in=29ppj$m^uge_+eppw8mtzgkkhb0!g%fkki12ju
 DEBUG = True
 
 # 로컬 Mock/테스트는 별도 설정 없이 실행하되, 실제 배포에서는 반드시 환경변수로 교체한다.
-PAYROLL_ENCRYPTION_KEY = os.environ.get(
-    "PAYROLL_ENCRYPTION_KEY",
-    "ySLIQ7x5nymu0hMIhs4FDupeWcxDLIK4pd_yQm7RA9o=" if DEBUG else None,
+APP_ENCRYPTION_KEY = (
+    os.environ.get("APP_ENCRYPTION_KEY")
+    or os.environ.get("PAYROLL_ENCRYPTION_KEY")  # 이전 배포 환경변수 호환
+    or ("ySLIQ7x5nymu0hMIhs4FDupeWcxDLIK4pd_yQm7RA9o=" if DEBUG else None)
 )
+# 외부 브랜치나 기존 코드가 참조할 수 있어 한동안 호환 alias를 유지한다.
+PAYROLL_ENCRYPTION_KEY = APP_ENCRYPTION_KEY
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -171,7 +174,7 @@ CODEF_MODE = "mock"
 PAYMENT_GATEWAY_MODE = "mock"
 
 REST_FRAMEWORK = {
-    "EXCEPTION_HANDLER": "businesses.exceptions.custom_exception_handler",
+    "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
 }
 
 CORS_ALLOWED_ORIGINS = [
