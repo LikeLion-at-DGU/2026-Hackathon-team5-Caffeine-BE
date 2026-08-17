@@ -174,6 +174,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CODEF_MODE = "mock"
 CODEF_MODE = os.environ.get("CODEF_MODE", "mock").strip().lower()
+
+CODEF_CLIENT_ID = os.environ.get("CODEF_CLIENT_ID", "").strip()
+CODEF_CLIENT_SECRET = os.environ.get("CODEF_CLIENT_SECRET", "").strip()
+CODEF_API_BASE_URL = os.environ.get("CODEF_API_BASE_URL", "").strip().rstrip("/")
+CODEF_TIMEOUT_SECONDS = float(
+    os.environ.get("CODEF_TIMEOUT_SECONDS", "20")
+)
+
 PAYMENT_GATEWAY_MODE = "mock"
 
 REST_FRAMEWORK = {
