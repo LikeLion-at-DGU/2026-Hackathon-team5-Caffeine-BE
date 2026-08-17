@@ -10,11 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
+import sys
 from dotenv import load_dotenv
 
 load_dotenv()
-
-PAYROLL_ENCRYPTION_KEY = os.environ.get("PAYROLL_ENCRYPTION_KEY")
 
 from pathlib import Path
 
@@ -26,13 +25,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-mv!r_=qx#)xin-zqnvzy25+!mjhbwhqos059+j88x7-joj(i3^'
 SECRET_KEY = 'django-insecure-5l()ew9)0in=29ppj$m^uge_+eppw8mtzgkkhb0!g%fkki12ju'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# 로컬 Mock/테스트는 별도 설정 없이 실행하되, 실제 배포에서는 반드시 환경변수로 교체한다.
+PAYROLL_ENCRYPTION_KEY = os.environ.get(
+    "PAYROLL_ENCRYPTION_KEY",
+    "ySLIQ7x5nymu0hMIhs4FDupeWcxDLIK4pd_yQm7RA9o=" if DEBUG else None,
+)
+
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get(
+        "DJANGO_ALLOWED_HOSTS",
+        "localhost,127.0.0.1,testserver",
+    ).split(",")
+    if host.strip()
+]
 
 
 # Application definition
@@ -45,16 +56,37 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'corsheaders',
     'payroll',
     'businesses',
     'analytics',
     'transactions',
     'settings',
     "reports",
+    "tax",
+    "chat",
 ]
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.6-luna").strip()
+OPENAI_TIMEOUT_SECONDS = float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "20"))
+OPENAI_MAX_OUTPUT_TOKENS = int(os.environ.get("OPENAI_MAX_OUTPUT_TOKENS", "1200"))
+OPENAI_REASONING_EFFORT = os.environ.get("OPENAI_REASONING_EFFORT", "none").strip()
+
+# 로컬/운영은 키가 있으면 OpenAI를 사용하고, 테스트는 실제 유료 호출을 차단한다.
+_default_chat_responder = (
+    "chat.services.openai_responder.OpenAIChatResponder"
+    if OPENAI_API_KEY and "test" not in sys.argv
+    else "chat.services.responder.RuleBasedChatResponder"
+)
+CHAT_RESPONDER_CLASS = (
+    os.environ.get("CHAT_RESPONDER_CLASS", "").strip()
+    or _default_chat_responder
+)
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -142,3 +174,17 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "businesses.exceptions.custom_exception_handler",
 }
 
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
+CORS_URLS_REGEX = r"^/api/.*$"
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+
+MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = "/media/"
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # 개발용

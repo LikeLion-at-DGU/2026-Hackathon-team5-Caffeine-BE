@@ -5,12 +5,17 @@ from django.utils import timezone
 from businesses.models import Business
 from reports.exceptions import (
     BusinessNotFound,
+    InvalidReportFileType,
+    InvalidReportPeriod,
+    MonthlyCloseRequired,
     ReportFileNotReady,
     ReportNotApproved,
     ReportNotFound,
     TaxAccountantEmailNotSet,
 )
 from reports.models import Report
+from tax.models import MonthlyClose
+from tax.services.periods import InvalidYearMonth, parse_year_month
 
 from .report_csv_service import generate_report_csv
 from .report_pdf_service import generate_report_pdf
@@ -23,7 +28,15 @@ def _get_business(business_id):
         raise BusinessNotFound()
 
 
+def _validate_year_month(year_month):
+    try:
+        return parse_year_month(year_month)
+    except InvalidYearMonth as exc:
+        raise InvalidReportPeriod() from exc
+
+
 def get_report(business_id, year_month):
+    _validate_year_month(year_month)
     business = _get_business(business_id)
     try:
         return Report.objects.select_related("business").get(
@@ -35,11 +48,19 @@ def get_report(business_id, year_month):
 
 def generate_report(business_id, year_month):
     business = _get_business(business_id)
+    year, month = _validate_year_month(year_month)
+    if not MonthlyClose.objects.filter(
+        business=business,
+        year=year,
+        month=month,
+        status=MonthlyClose.Status.CLOSED,
+    ).exists():
+        raise MonthlyCloseRequired()
 
     report, _ = Report.objects.update_or_create(
         business=business,
         year_month=year_month,
-        defaults={"status": "generated", "approved_at": None},
+        defaults={"status": "generated", "approved_at": None, "sent_at": None},
     )
 
     if report.csv_file:
@@ -49,7 +70,7 @@ def generate_report(business_id, year_month):
 
     report.csv_file.save(
         f"{year_month}.csv",
-        ContentFile(generate_report_csv(business, year_month).encode("utf-8")),
+        ContentFile(generate_report_csv(business, year_month).encode("utf-8-sig")),
         save=False,
     )
     report.pdf_file.save(
@@ -62,6 +83,8 @@ def generate_report(business_id, year_month):
 
 
 def get_report_file(business_id, year_month, file_type):
+    if file_type not in {"csv", "pdf"}:
+        raise InvalidReportFileType()
     report = get_report(business_id, year_month)
     file_field = report.csv_file if file_type == "csv" else report.pdf_file
     if not file_field:

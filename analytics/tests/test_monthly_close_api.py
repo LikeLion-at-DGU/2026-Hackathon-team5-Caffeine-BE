@@ -1,14 +1,14 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from analytics.models import MonthlyClose
 from businesses.models import Business
+from tax.models import MonthlyClose
 
 
 class MonthlyCloseAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.business = Business.objects.create(business_name="카페비서")
+        self.business = Business.objects.create(business_name="카페비서", tax_type="GENERAL")
         self.url = f"/api/businesses/{self.business.id}/analytics/monthly-summary/close/"
 
     def test_close_month_success(self):
@@ -38,7 +38,7 @@ class MonthlyCloseAPITests(TestCase):
         self.assertEqual(MonthlyClose.objects.filter(business=self.business).count(), 2)
 
     def test_close_same_month_different_business_both_succeed(self):
-        other_business = Business.objects.create(business_name="옆동네카페")
+        other_business = Business.objects.create(business_name="옆동네카페", tax_type="GENERAL")
 
         response1 = self.client.post(self.url, {"year": 2026, "month": 8}, format="json")
         response2 = self.client.post(

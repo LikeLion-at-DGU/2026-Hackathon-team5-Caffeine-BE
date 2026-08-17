@@ -9,4 +9,6 @@ def with_pending_duplicate_flag(queryset):
         | Q(suspected_transaction_id=OuterRef("pk")),
         status=TransactionDuplicate.Status.PENDING,
     )
-    return queryset.annotate(has_pending_duplicate=Exists(pending_duplicates))
+    return queryset.select_related("deduction_review").annotate(
+        has_pending_duplicate=Exists(pending_duplicates)
+    )

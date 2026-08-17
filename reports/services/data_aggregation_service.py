@@ -1,5 +1,8 @@
 from transactions.models import Transaction
 from payroll.models import Payment
+from tax.models import DeductionReview
+from tax.services.periods import month_range
+from tax.services.querysets import effective_purchase_transactions, effective_transactions
 
 
 def _parse_year_month(year_month):
@@ -10,29 +13,31 @@ def _parse_year_month(year_month):
 def get_sales_invoices(business, year_month):
     """매출 세금계산서 목록"""
     year, month = _parse_year_month(year_month)
-    return Transaction.objects.filter(
+    start_date, end_date = month_range(year, month)
+    return effective_transactions(
         business=business,
+        start_date=start_date,
+        end_date=end_date,
+    ).filter(
         transaction_type=Transaction.TransactionType.SALE,
         source_type=Transaction.SourceType.TAX_INVOICE,
-        transaction_date__year=year,
-        transaction_date__month=month,
-        cancel_status=Transaction.CancelStatus.NORMAL,
     )
 
 
 def get_purchase_evidences(business, year_month):
-    """매입 증빙 서류 (카드/현금영수증)"""
+    """매입 증빙 서류 (카드/현금영수증/전자세금계산서)"""
     year, month = _parse_year_month(year_month)
-    return Transaction.objects.filter(
+    start_date, end_date = month_range(year, month)
+    return effective_purchase_transactions(
         business=business,
-        transaction_type=Transaction.TransactionType.PURCHASE,
+        start_date=start_date,
+        end_date=end_date,
+    ).filter(
         source_type__in=[
             Transaction.SourceType.CARD_PURCHASE,
             Transaction.SourceType.CASH_RECEIPT_PURCHASE,
+            Transaction.SourceType.TAX_INVOICE,
         ],
-        transaction_date__year=year,
-        transaction_date__month=month,
-        cancel_status=Transaction.CancelStatus.NORMAL,
         expense_purpose=Transaction.ExpensePurpose.BUSINESS,
     )
 
@@ -48,6 +53,19 @@ def get_labor_cost_statements(business, year_month):
 
 
 def get_deemed_purchase_deductions(business, year_month):
-    """의제매입 공제 내역"""
-    # TODO: tax 앱 아직 구현 전. Deduction 모델 나오면 실제 조회로 교체.
-    return []
+    """현재 규칙상 의제매입 검토 후보인 면세 원재료 목록."""
+    year, month = _parse_year_month(year_month)
+    start_date, end_date = month_range(year, month)
+    purchases = effective_purchase_transactions(
+        business=business,
+        start_date=start_date,
+        end_date=end_date,
+    ).filter(
+        expense_purpose=Transaction.ExpensePurpose.BUSINESS,
+        vat_amount=0,
+        category=Transaction.Category.RAW_MATERIAL,
+    )
+    return DeductionReview.objects.select_related("transaction").filter(
+        transaction__in=purchases,
+        confirmed_status=DeductionReview.ConfirmedStatus.DEDUCTIBLE,
+    )

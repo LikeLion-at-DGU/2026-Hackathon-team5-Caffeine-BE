@@ -20,8 +20,8 @@ class BusinessDetailApiTests(APITestCase):
         res = self.client.get(url)
 
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data["business_name"], "카페비서 데모카페")
-        self.assertIsNone(res.data["business_number"])
+        self.assertEqual(res.data["data"]["business_name"], "카페비서 데모카페")
+        self.assertIsNone(res.data["data"]["business_number"])
 
     def test_patch_business_detail(self):
         url = reverse("business-detail", kwargs={"pk": self.business.id})
@@ -59,7 +59,7 @@ class BusinessDetailApiTests(APITestCase):
 
         self.business.refresh_from_db()
         self.assertEqual(self.business.representative_name, "유지은")
-        
+
     def test_patch_cannot_change_is_demo(self):
         # 서버 관리 필드는 PATCH 요청으로 변경되지 않아야 한다.
         self.assertTrue(self.business.is_demo)

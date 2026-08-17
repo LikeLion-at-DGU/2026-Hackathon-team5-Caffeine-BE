@@ -1,3 +1,4 @@
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
 from businesses.models import Business
@@ -97,6 +98,8 @@ class TransactionSerializer(serializers.ModelSerializer):
     category = serializers.SerializerMethodField()
     expense_purpose = serializers.SerializerMethodField()
     duplicate = serializers.SerializerMethodField()
+    deduction = serializers.SerializerMethodField()
+    is_deemed = serializers.SerializerMethodField()
 
     class Meta:
         model = Transaction
@@ -120,6 +123,8 @@ class TransactionSerializer(serializers.ModelSerializer):
             "expense_purpose",
             "source_deduction_status",
             "duplicate",
+            "deduction",
+            "is_deemed",
             "created_at",
             "updated_at",
         ]
@@ -155,6 +160,38 @@ class TransactionSerializer(serializers.ModelSerializer):
     @staticmethod
     def get_duplicate(obj):
         return {"is_suspected": bool(getattr(obj, "has_pending_duplicate", False))}
+
+    @staticmethod
+    def get_deduction(obj):
+        try:
+            review = obj.deduction_review
+        except ObjectDoesNotExist:
+            return {
+                "status": "REVIEW_REQUIRED",
+                "source": "RULE",
+                "is_confirmed": False,
+            }
+        is_confirmed = review.confirmed_status != "UNCONFIRMED"
+        return {
+            "status": review.confirmed_status if is_confirmed else review.suggested_status,
+            "source": "USER" if is_confirmed else review.suggestion_source,
+            "is_confirmed": is_confirmed,
+            "reason": review.suggestion_reason,
+        }
+
+    @staticmethod
+    def get_is_deemed(obj):
+        try:
+            review = obj.deduction_review
+        except ObjectDoesNotExist:
+            return False
+        return bool(
+            obj.transaction_type == Transaction.TransactionType.PURCHASE
+            and obj.expense_purpose == Transaction.ExpensePurpose.BUSINESS
+            and obj.category == Transaction.Category.RAW_MATERIAL
+            and obj.vat_amount == 0
+            and review.confirmed_status == "DEDUCTIBLE"
+        )
 
 
 class TransactionCategoryUpdateSerializer(serializers.Serializer):

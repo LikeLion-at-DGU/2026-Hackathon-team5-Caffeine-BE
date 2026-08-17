@@ -38,7 +38,18 @@ def generate_report_csv(business, year_month):
             writer.writerow([p.employee.name, p.gross_pay, p.withholding_tax])
         writer.writerow([])
 
-    for d in get_deemed_purchase_deductions(business, year_month):
-        pass
+    deemed_candidates = list(get_deemed_purchase_deductions(business, year_month))
+    if deemed_candidates:
+        writer.writerow(["[의제매입 검토 후보]"])
+        writer.writerow(["일자", "거래처", "면세 원재료 금액", "상태"])
+        for review in deemed_candidates:
+            tx = review.transaction
+            writer.writerow([
+                tx.transaction_date,
+                tx.merchant_name,
+                tx.total_amount,
+                "공제율 적용 전 후보",
+            ])
+        writer.writerow([])
 
     return buffer.getvalue()
