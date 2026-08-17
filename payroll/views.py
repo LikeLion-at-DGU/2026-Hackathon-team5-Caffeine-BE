@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.responses import error_response, success_response
 from payroll.exceptions import PayrollServiceError
 from payroll.serializers import (
     EmployeeCreateSerializer, EmployeeListItemSerializer, EmployeeUpdateSerializer,
@@ -16,8 +17,10 @@ from payroll.services.payslip_xlsx_service import generate_payslip_xlsx
 
 
 def _error_response(code: str, message: str, http_status: int, errors: dict | None = None) -> Response:
-    return Response(
-        {"success": False, "code": code, "message": message, "errors": errors or {}},
+    return error_response(
+        code=code,
+        message=message,
+        errors=errors,
         status=http_status,
     )
 
@@ -26,12 +29,11 @@ class EmployeeListCreateView(APIView):
     def get(self, request, business_id):
         employees = employee_service.list_employees(business_id)
         serializer = EmployeeListItemSerializer(employees, many=True)
-        return Response({
-            "success": True,
-            "code": "EMPLOYEE_LIST_SUCCESS",
-            "message": "직원 목록을 조회했습니다.",
-            "data": serializer.data,
-        })
+        return success_response(
+            code="EMPLOYEE_LIST_SUCCESS",
+            message="직원 목록을 조회했습니다.",
+            data=serializer.data,
+        )
 
     def post(self, request, business_id):
         serializer = EmployeeCreateSerializer(data=request.data)
@@ -45,12 +47,12 @@ class EmployeeListCreateView(APIView):
         except PayrollServiceError as e:
             return _error_response(e.code, e.message, status.HTTP_409_CONFLICT)
 
-        return Response({
-            "success": True,
-            "code": "EMPLOYEE_CREATE_SUCCESS",
-            "message": "직원을 등록했습니다.",
-            "data": {"employee_id": employee.id},
-        }, status=status.HTTP_201_CREATED)
+        return success_response(
+            code="EMPLOYEE_CREATE_SUCCESS",
+            message="직원을 등록했습니다.",
+            data={"employee_id": employee.id},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class EmployeeDetailView(APIView):
@@ -66,12 +68,11 @@ class EmployeeDetailView(APIView):
         except PayrollServiceError as e:
             return _error_response(e.code, e.message, status.HTTP_404_NOT_FOUND)
 
-        return Response({
-            "success": True,
-            "code": "EMPLOYEE_UPDATE_SUCCESS",
-            "message": "직원 정보를 수정했습니다.",
-            "data": {"employee_id": employee.id},
-        })
+        return success_response(
+            code="EMPLOYEE_UPDATE_SUCCESS",
+            message="직원 정보를 수정했습니다.",
+            data={"employee_id": employee.id},
+        )
 
     def delete(self, request, business_id, employee_id):
         try:
@@ -93,12 +94,11 @@ class PaymentListCreateView(APIView):
             month=int(month) if month else None,
         )
         serializer = PaymentListItemSerializer(payments, many=True)
-        return Response({
-            "success": True,
-            "code": "PAYROLL_LIST_SUCCESS",
-            "message": "월별 급여 정보를 조회했습니다.",
-            "data": serializer.data,
-        })
+        return success_response(
+            code="PAYROLL_LIST_SUCCESS",
+            message="월별 급여 정보를 조회했습니다.",
+            data=serializer.data,
+        )
 
     def post(self, request, business_id):
         serializer = PaymentCreateSerializer(data=request.data)
@@ -117,17 +117,17 @@ class PaymentListCreateView(APIView):
             }.get(e.code, status.HTTP_400_BAD_REQUEST)
             return _error_response(e.code, e.message, http_status)
 
-        return Response({
-            "success": True,
-            "code": "PAYROLL_CREATE_SUCCESS",
-            "message": "급여 정보를 등록했습니다.",
-            "data": {
+        return success_response(
+            code="PAYROLL_CREATE_SUCCESS",
+            message="급여 정보를 등록했습니다.",
+            data={
                 "payment_id": payment.id,
                 "work_hours": payment.work_hours,
                 "gross_pay": payment.gross_pay,
                 "withholding_tax": payment.withholding_tax,
             },
-        }, status=status.HTTP_201_CREATED)
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class PaymentDetailView(APIView):
@@ -149,17 +149,16 @@ class PaymentDetailView(APIView):
             }.get(e.code, status.HTTP_400_BAD_REQUEST)
             return _error_response(e.code, e.message, http_status)
 
-        return Response({
-            "success": True,
-            "code": "PAYROLL_UPDATE_SUCCESS",
-            "message": "급여 정보를 수정했습니다.",
-            "data": {
+        return success_response(
+            code="PAYROLL_UPDATE_SUCCESS",
+            message="급여 정보를 수정했습니다.",
+            data={
                 "payment_id": payment.id,
                 "work_hours": payment.work_hours,
                 "gross_pay": payment.gross_pay,
                 "withholding_tax": payment.withholding_tax,
             },
-        })
+        )
 
 
 class PayrollSummaryView(APIView):
@@ -176,12 +175,11 @@ class PayrollSummaryView(APIView):
         due_year, due_month = (int(year), int(month) + 1) if int(month) < 12 else (int(year) + 1, 1)
         payment_due_date = date(due_year, due_month, 10).isoformat()
 
-        return Response({
-            "success": True,
-            "code": "PAYROLL_SUMMARY_SUCCESS",
-            "message": "월별 노무 요약을 조회했습니다.",
-            "data": {**summary, "payment_due_date": payment_due_date},
-        })
+        return success_response(
+            code="PAYROLL_SUMMARY_SUCCESS",
+            message="월별 노무 요약을 조회했습니다.",
+            data={**summary, "payment_due_date": payment_due_date},
+        )
 
 
 class PaymentPayslipView(APIView):

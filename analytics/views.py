@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.responses import error_response, success_response
 from analytics.exceptions import AnalyticsServiceError
 from analytics.serializers import (
     AnalyticsExportQuerySerializer,
@@ -17,8 +18,10 @@ from businesses.models import Business
 
 
 def _error_response(code: str, message: str, http_status: int, errors: dict | None = None) -> Response:
-    return Response(
-        {"success": False, "code": code, "message": message, "errors": errors or {}},
+    return error_response(
+        code=code,
+        message=message,
+        errors=errors,
         status=http_status,
     )
 
@@ -45,12 +48,11 @@ class MonthlySummaryView(APIView):
             )
 
         data = get_monthly_tax_summary(business_id, **query.validated_data)
-        return Response({
-            "success": True,
-            "code": "MONTHLY_SUMMARY_SUCCESS",
-            "message": "월별 세무 현황 결산을 조회했습니다.",
-            "data": data,
-        })
+        return success_response(
+            code="MONTHLY_SUMMARY_SUCCESS",
+            message="월별 세무 현황 결산을 조회했습니다.",
+            data=data,
+        )
 
 
 class MonthlyCloseView(APIView):
@@ -71,15 +73,14 @@ class MonthlyCloseView(APIView):
         except AnalyticsServiceError as e:
             return _error_response(e.code, e.message, status.HTTP_409_CONFLICT)
 
-        return Response({
-            "success": True,
-            "code": "MONTHLY_CLOSE_SUCCESS",
-            "message": f"{month}월 장부가 마감 승인되었습니다.",
-            "data": {
+        return success_response(
+            code="MONTHLY_CLOSE_SUCCESS",
+            message=f"{month}월 장부가 마감 승인되었습니다.",
+            data={
                 "closed_at": monthly_close.approved_at.isoformat(),
                 "is_export_available": True,
             },
-        })
+        )
 
 
 class CostRatioView(APIView):
@@ -92,12 +93,11 @@ class CostRatioView(APIView):
                 "INVALID_PERIOD", "조회 기간이 올바르지 않습니다.",
                 status.HTTP_400_BAD_REQUEST, query.errors,
             )
-        return Response({
-            "success": True,
-            "code": "COST_RATIO_SUCCESS",
-            "message": "카테고리별 비용 비율을 조회했습니다.",
-            "data": get_cost_ratio(business_id=business_id, **query.validated_data),
-        })
+        return success_response(
+            code="COST_RATIO_SUCCESS",
+            message="카테고리별 비용 비율을 조회했습니다.",
+            data=get_cost_ratio(business_id=business_id, **query.validated_data),
+        )
 
 
 class CategoryTrendView(APIView):
@@ -110,12 +110,11 @@ class CategoryTrendView(APIView):
                 "INVALID_TREND_QUERY", "증감 추이 조회 조건이 올바르지 않습니다.",
                 status.HTTP_400_BAD_REQUEST, query.errors,
             )
-        return Response({
-            "success": True,
-            "code": "CATEGORY_TREND_SUCCESS",
-            "message": "카테고리 증감 추이를 조회했습니다.",
-            "data": get_category_trend(business_id=business_id, **query.validated_data),
-        })
+        return success_response(
+            code="CATEGORY_TREND_SUCCESS",
+            message="카테고리 증감 추이를 조회했습니다.",
+            data=get_category_trend(business_id=business_id, **query.validated_data),
+        )
 
 
 class AnalyticsSummaryView(APIView):
@@ -129,12 +128,11 @@ class AnalyticsSummaryView(APIView):
                 status.HTTP_400_BAD_REQUEST, query.errors,
             )
         data = get_monthly_tax_summary(business_id, **query.validated_data)
-        return Response({
-            "success": True,
-            "code": "ANALYTICS_SUMMARY_SUCCESS",
-            "message": "매출·비용 종합 요약을 조회했습니다.",
-            "data": data,
-        })
+        return success_response(
+            code="ANALYTICS_SUMMARY_SUCCESS",
+            message="매출·비용 종합 요약을 조회했습니다.",
+            data=data,
+        )
 
 
 class AnalyticsExportView(APIView):

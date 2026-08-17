@@ -3,14 +3,17 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.responses import error_response, success_response
 from reports.exceptions import ReportServiceError
 from reports.serializers import ReportSerializer
 from reports.services import report_service
 
 
 def _error_response(code: str, message: str, http_status: int, errors: dict | None = None) -> Response:
-    return Response(
-        {"success": False, "code": code, "message": message, "errors": errors or {}},
+    return error_response(
+        code=code,
+        message=message,
+        errors=errors,
         status=http_status,
     )
 
@@ -22,12 +25,11 @@ class ReportDetailView(APIView):
         except ReportServiceError as e:
             return _error_response(e.code, e.message, e.status_code)
 
-        return Response({
-            "success": True,
-            "code": "REPORT_DETAIL_SUCCESS",
-            "message": "리포트 현황을 조회했습니다.",
-            "data": ReportSerializer(report).data,
-        })
+        return success_response(
+            code="REPORT_DETAIL_SUCCESS",
+            message="리포트 현황을 조회했습니다.",
+            data=ReportSerializer(report).data,
+        )
 
 
 class ReportGenerateView(APIView):
@@ -37,12 +39,11 @@ class ReportGenerateView(APIView):
         except ReportServiceError as e:
             return _error_response(e.code, e.message, e.status_code)
 
-        return Response({
-            "success": True,
-            "code": "REPORT_GENERATE_SUCCESS",
-            "message": "리포트를 생성했습니다.",
-            "data": ReportSerializer(report).data,
-        })
+        return success_response(
+            code="REPORT_GENERATE_SUCCESS",
+            message="리포트를 생성했습니다.",
+            data=ReportSerializer(report).data,
+        )
 
 
 class ReportDownloadView(APIView):
@@ -72,12 +73,11 @@ class ReportApproveView(APIView):
         except ReportServiceError as e:
             return _error_response(e.code, e.message, e.status_code)
 
-        return Response({
-            "success": True,
-            "code": "REPORT_APPROVE_SUCCESS",
-            "message": "리포트를 승인했습니다.",
-            "data": ReportSerializer(report).data,
-        })
+        return success_response(
+            code="REPORT_APPROVE_SUCCESS",
+            message="리포트를 승인했습니다.",
+            data=ReportSerializer(report).data,
+        )
 
 
 class ReportSendEmailView(APIView):
@@ -87,9 +87,8 @@ class ReportSendEmailView(APIView):
         except ReportServiceError as e:
             return _error_response(e.code, e.message, e.status_code)
 
-        return Response({
-            "success": True,
-            "code": "REPORT_SEND_EMAIL_SUCCESS",
-            "message": "세무사에게 자료를 전송했습니다.",
-            "data": ReportSerializer(report).data,
-        })
+        return success_response(
+            code="REPORT_SEND_EMAIL_SUCCESS",
+            message="세무사에게 자료를 전송했습니다.",
+            data=ReportSerializer(report).data,
+        )

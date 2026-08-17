@@ -2,7 +2,7 @@ from rest_framework import mixins
 from rest_framework.decorators import action
 from rest_framework.viewsets import GenericViewSet
 
-from .api_response import error_response, success_response
+from core.responses import error_response, success_response
 from .models import Business
 from .serializers import (
     BusinessSerializer,

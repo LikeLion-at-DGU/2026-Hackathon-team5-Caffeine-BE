@@ -12,7 +12,6 @@ class ChatService:
         return responder_class()
 
     @classmethod
-    @db_transaction.atomic
     def send_message(cls, *, business, content, year, month):
         user_message = ChatMessage.objects.create(
             business=business,
@@ -27,14 +26,16 @@ class ChatService:
             year=year,
             month=month,
         )
-        assistant_message = ChatMessage.objects.create(
-            business=business,
-            role=ChatMessage.Role.ASSISTANT,
-            content=reply.content,
-            reply_to=user_message,
-            metadata={
-                "responder": getattr(responder, "name", responder.__class__.__name__),
-                **reply.metadata,
-            },
-        )
+        # 외부 API를 기다리는 동안 DB write transaction을 잡고 있지 않는다.
+        with db_transaction.atomic():
+            assistant_message = ChatMessage.objects.create(
+                business=business,
+                role=ChatMessage.Role.ASSISTANT,
+                content=reply.content,
+                reply_to=user_message,
+                metadata={
+                    "responder": getattr(responder, "name", responder.__class__.__name__),
+                    **reply.metadata,
+                },
+            )
         return user_message, assistant_message

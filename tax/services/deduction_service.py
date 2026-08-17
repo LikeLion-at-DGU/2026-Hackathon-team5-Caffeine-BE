@@ -6,7 +6,7 @@ from django.utils import timezone
 from transactions.models import Transaction
 
 from ..models import DeductionReview
-from .querysets import effective_purchase_transactions
+from transactions.services.querysets import effective_purchase_transactions
 
 
 class DeductionReviewService:

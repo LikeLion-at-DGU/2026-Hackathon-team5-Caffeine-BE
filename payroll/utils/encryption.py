@@ -1,21 +1,7 @@
-from cryptography.fernet import Fernet
-from django.conf import settings
+"""Payroll-specific names kept over the project-wide encryption primitive."""
+
+from core.security.encryption import decrypt_value, encrypt_value
 
 
-def _get_fernet() -> Fernet:
-    key = settings.PAYROLL_ENCRYPTION_KEY
-    if not key:
-        raise ValueError("PAYROLL_ENCRYPTION_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.")
-    return Fernet(key.encode() if isinstance(key, str) else key)
-
-
-def encrypt_rrn_front(plain_text: str) -> str:
-    if not plain_text:
-        return ""
-    return _get_fernet().encrypt(plain_text.encode()).decode()
-
-
-def decrypt_rrn_front(cipher_text: str) -> str:
-    if not cipher_text:
-        return ""
-    return _get_fernet().decrypt(cipher_text.encode()).decode()
+encrypt_rrn_front = encrypt_value
+decrypt_rrn_front = decrypt_value

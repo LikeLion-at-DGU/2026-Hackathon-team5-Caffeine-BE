@@ -2,7 +2,7 @@ from transactions.models import Transaction
 from payroll.models import Payment
 from tax.models import DeductionReview
 from tax.services.periods import month_range
-from tax.services.querysets import effective_purchase_transactions, effective_transactions
+from transactions.services.querysets import effective_purchase_transactions, effective_transactions
 
 
 def _parse_year_month(year_month):

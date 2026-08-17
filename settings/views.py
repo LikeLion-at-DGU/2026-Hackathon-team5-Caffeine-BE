@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.responses import error_response, success_response
 from settings.exceptions import SettingsServiceError
 from settings.serializers import (
     BusinessInfoSerializer, BusinessInfoUpdateSerializer,
@@ -12,8 +13,10 @@ from settings.services import business_info_service, subscription_service
 
 
 def _error_response(code: str, message: str, http_status: int, errors: dict | None = None) -> Response:
-    return Response(
-        {"success": False, "code": code, "message": message, "errors": errors or {}},
+    return error_response(
+        code=code,
+        message=message,
+        errors=errors,
         status=http_status,
     )
 
@@ -27,12 +30,11 @@ class BusinessInfoView(APIView):
 
         data = business_info_service.get_business_info(business_id)
         serializer = BusinessInfoSerializer(data)
-        return Response({
-            "success": True,
-            "code": "BUSINESS_SETTINGS_SUCCESS",
-            "message": "사업장 기본정보를 조회했습니다.",
-            "data": serializer.data,
-        })
+        return success_response(
+            code="BUSINESS_SETTINGS_SUCCESS",
+            message="사업장 기본정보를 조회했습니다.",
+            data=serializer.data,
+        )
 
     def patch(self, request, business_id):
         try:
@@ -48,12 +50,11 @@ class BusinessInfoView(APIView):
             )
 
         data = business_info_service.update_business_info(business_id, serializer.validated_data)
-        return Response({
-            "success": True,
-            "code": "BUSINESS_SETTINGS_UPDATE_SUCCESS",
-            "message": "사업장 기본정보를 저장했습니다.",
-            "data": data,
-        })
+        return success_response(
+            code="BUSINESS_SETTINGS_UPDATE_SUCCESS",
+            message="사업장 기본정보를 저장했습니다.",
+            data=data,
+        )
 
 
 class SubscriptionView(APIView):
@@ -64,12 +65,11 @@ class SubscriptionView(APIView):
             return _error_response(e.code, e.message, status.HTTP_404_NOT_FOUND)
 
         serializer = SubscriptionSerializer(subscription)
-        return Response({
-            "success": True,
-            "code": "SUBSCRIPTION_SUCCESS",
-            "message": "구독 정보를 조회했습니다.",
-            "data": serializer.data,
-        })
+        return success_response(
+            code="SUBSCRIPTION_SUCCESS",
+            message="구독 정보를 조회했습니다.",
+            data=serializer.data,
+        )
 
 
 class PaymentMethodUpdateView(APIView):
@@ -87,12 +87,11 @@ class PaymentMethodUpdateView(APIView):
         except SettingsServiceError as e:
             return _error_response(e.code, e.message, status.HTTP_400_BAD_REQUEST)
 
-        return Response({
-            "success": True,
-            "code": "PAYMENT_METHOD_UPDATE_SUCCESS",
-            "message": "결제수단이 변경되었습니다.",
-            "data": {},
-        })
+        return success_response(
+            code="PAYMENT_METHOD_UPDATE_SUCCESS",
+            message="결제수단이 변경되었습니다.",
+            data={},
+        )
 
 
 class SubscriptionCancelView(APIView):
@@ -103,12 +102,11 @@ class SubscriptionCancelView(APIView):
             http_status = status.HTTP_409_CONFLICT if e.code == "ALREADY_CANCELLED" else status.HTTP_404_NOT_FOUND
             return _error_response(e.code, e.message, http_status)
 
-        return Response({
-            "success": True,
-            "code": "SUBSCRIPTION_CANCEL_SUCCESS",
-            "message": "구독이 취소되었습니다.",
-            "data": {
+        return success_response(
+            code="SUBSCRIPTION_CANCEL_SUCCESS",
+            message="구독이 취소되었습니다.",
+            data={
                 "cancelled_at": subscription.cancelled_at.isoformat(),
                 "access_until": subscription.access_until.isoformat(),
             },
-        })
+        )
