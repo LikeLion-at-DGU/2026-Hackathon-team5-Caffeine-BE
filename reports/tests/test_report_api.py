@@ -4,8 +4,8 @@ from django.test import TestCase
 from django.test.utils import override_settings
 
 from businesses.models import Business
+from reports.models import Report
 from tax.models import MonthlyClose
-from .models import Report
 
 
 class ReportFlowTests(TestCase):
@@ -23,7 +23,10 @@ class ReportFlowTests(TestCase):
         cls._media_directory.cleanup()
 
     def setUp(self):
-        self.business, _ = Business.objects.get_or_create(pk=1, defaults={"business_name": "테스트 카페"})
+        self.business, _ = Business.objects.get_or_create(
+            pk=1,
+            defaults={"business_name": "테스트 카페"},
+        )
         MonthlyClose.objects.create(
             business=self.business,
             year=2026,
@@ -41,12 +44,20 @@ class ReportFlowTests(TestCase):
         self.assertTrue(report.pdf_file)
 
     def test_send_email_blocked_before_approval(self):
-        Report.objects.create(business=self.business, year_month="2026-08", status="generated")
+        Report.objects.create(
+            business=self.business,
+            year_month="2026-08",
+            status="generated",
+        )
         response = self.client.post(f"{self.base}/send-email/")
         self.assertEqual(response.status_code, 400)
 
     def test_send_email_blocked_without_accountant_email(self):
-        Report.objects.create(business=self.business, year_month="2026-08", status="approved")
+        Report.objects.create(
+            business=self.business,
+            year_month="2026-08",
+            status="approved",
+        )
         response = self.client.post(f"{self.base}/send-email/")
         self.assertEqual(response.status_code, 400)
 
@@ -59,10 +70,10 @@ class ReportFlowTests(TestCase):
         self.assertIsNone(report.approved_at)
 
     def test_regenerate_resets_previous_sent_timestamp(self):
-        self.client.post(f"{self.base}/generate/")
-        report = Report.objects.get(business=self.business, year_month="2026-08")
         from django.utils import timezone
 
+        self.client.post(f"{self.base}/generate/")
+        report = Report.objects.get(business=self.business, year_month="2026-08")
         report.sent_at = timezone.now()
         report.save(update_fields=["sent_at"])
 
@@ -78,7 +89,11 @@ class ReportFlowTests(TestCase):
         self.assertEqual(response.data["code"], "INVALID_REPORT_FILE_TYPE")
 
     def test_generate_requires_tax_month_close(self):
-        MonthlyClose.objects.filter(business=self.business, year=2026, month=8).delete()
+        MonthlyClose.objects.filter(
+            business=self.business,
+            year=2026,
+            month=8,
+        ).delete()
 
         response = self.client.post(f"{self.base}/generate/")
 

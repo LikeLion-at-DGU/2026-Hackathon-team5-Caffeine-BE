@@ -9,7 +9,7 @@ from transactions.models import Transaction
 from tax.models import DeductionReview
 from tax.services.deduction_service import DeductionReviewService
 from tax.services.periods import month_range
-from tax.services.querysets import effective_purchase_transactions, effective_transactions
+from transactions.services.querysets import effective_purchase_transactions, effective_transactions
 from tax.services.vat_service import UnsupportedTaxType, VatForecastService
 
 

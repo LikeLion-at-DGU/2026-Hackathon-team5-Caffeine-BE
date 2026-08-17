@@ -1,11 +1,4 @@
 venv/
-__pycache__/
-*.pyc
-db.sqlite3
-/media/
-.env
-*.pdf
-*.xlsx
 .venv/
 __pycache__/
 *.py[cod]
@@ -16,6 +9,10 @@ db.sqlite3
 .env
 .env.*
 !.env.example
+
+/media/
+*.pdf
+*.xlsx
 
 .idea/
 .vscode/

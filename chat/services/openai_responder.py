@@ -7,7 +7,7 @@ from openai import OpenAI
 
 from chat.models import ChatMessage
 from tax.services.periods import month_range
-from tax.services.querysets import effective_transactions
+from transactions.services.querysets import effective_transactions
 
 from .responder import ChatReply, RuleBasedChatResponder
 

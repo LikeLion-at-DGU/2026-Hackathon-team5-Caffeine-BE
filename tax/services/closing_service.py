@@ -10,7 +10,7 @@ from transactions.models import Transaction
 from ..models import DeductionReview, MonthlyClose
 from .deduction_service import DeductionReviewService
 from .periods import month_range
-from .querysets import effective_transactions
+from transactions.services.querysets import effective_transactions
 from .vat_service import VatForecastService
 
 

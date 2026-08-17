@@ -5,7 +5,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 
 from .models import Transaction, TransactionDuplicate
-from .responses import error_response, success_response
+from core.responses import error_response, success_response
 from .serializers import (
     DuplicateListQuerySerializer,
     DuplicateResolutionSerializer,
