@@ -7,10 +7,13 @@
 요청/응답 인코딩 방식은 CODEF 공식 Python SDK(easycodefpy)를 따른다.
 """
 
+import base64
 import json
 from urllib.parse import quote, unquote_plus
 
 import requests
+from Crypto.Cipher import PKCS1_v1_5
+from Crypto.PublicKey import RSA
 from django.conf import settings
 from requests.auth import HTTPBasicAuth
 
@@ -99,3 +102,64 @@ class CodefClient:
             raise CodefClientError(
                 f"CODEF 응답을 JSON으로 해석할 수 없습니다: {exc}"
             ) from exc
+            
+
+
+def encrypt_with_public_key(text: str) -> str:
+    """CODEF Public Key로 평문을 RSA 암호화한다.
+
+    공식 CODEF Python SDK(easycodefpy)의 util.encrypt_rsa()와 완전히 동일한
+    방식이다 — RSA / PKCS1_v1_5 padding, 공개키는 base64로 인코딩된 DER
+    형식이라고 가정한다.
+    """
+
+    if not settings.CODEF_PUBLIC_KEY:
+        raise CodefClientError(
+            "CODEF_PUBLIC_KEY가 설정되지 않았습니다. .env를 확인하세요."
+        )
+
+    try:
+        key_der = base64.b64decode(settings.CODEF_PUBLIC_KEY)
+        public_key = RSA.importKey(key_der)
+        cipher = PKCS1_v1_5.new(public_key)
+        cipher_text = cipher.encrypt(text.encode("utf-8"))
+    except (ValueError, TypeError) as exc:
+        raise CodefClientError(
+            f"CODEF_PUBLIC_KEY로 RSA 암호화에 실패했습니다: {exc}"
+        ) from exc
+
+    return base64.b64encode(cipher_text).decode("utf-8")
+
+
+TWO_WAY_REQUIRED_CODE = "CF-03002"
+
+
+def is_two_way_required(raw: dict) -> bool:
+    """CODEF 응답이 추가인증(2-way)을 요구하는 상태인지 확인한다."""
+    result = raw.get("result") or {}
+    data = raw.get("data") or {}
+    return (
+        result.get("code") == TWO_WAY_REQUIRED_CODE
+        and bool(data.get("continue2Way"))
+    )
+
+
+def extract_two_way_info(raw: dict) -> dict:
+    """추가인증 재요청에 필요한 값을 CODEF 응답에서 꺼낸다."""
+    data = raw.get("data") or {}
+    return {
+        "jobIndex": data.get("jobIndex"),
+        "threadIndex": data.get("threadIndex"),
+        "jti": data.get("jti"),
+        "twoWayTimestamp": data.get("twoWayTimestamp"),
+    }
+
+
+def build_two_way_payload(base_payload: dict, two_way_info: dict, simple_auth: str,) -> dict:
+    """1차 요청 payload에 추가인증 정보를 덧붙인 2차 요청 payload를 만든다."""
+    return {
+        **base_payload,
+        "simpleAuth": simple_auth,
+        "is2Way": True,
+        "twoWayInfo": two_way_info,
+    }
