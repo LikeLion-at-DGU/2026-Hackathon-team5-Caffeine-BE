@@ -9,18 +9,36 @@ os.environ을 patch.dict로 채워 넣거나 input()/getpass.getpass()를 Mock�
 대체해 검증한다.
 """
 
+import base64
 import io
 import json
 import os
 from unittest.mock import patch
 
+from Crypto.Cipher import PKCS1_v1_5
+from Crypto.PublicKey import RSA
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from businesses.models import Business
 
 _ENV_MODULE = "businesses.management.commands.probe_cash_receipt_sales"
+
+# 암호화 관련 테스트에서 재사용할 고정 테스트 키쌍. 매 테스트마다 새로 생성할
+# 필요 없어 모듈 로드 시 한 번만 만든다 — CODEF가 실제로 주는 키가 아니라,
+# encrypt_with_public_key()가 만든 값을 대응하는 개인키로 복호화할 수 있는지
+# 확인하는 용도다.
+_TEST_PRIVATE_KEY = RSA.generate(2048)
+_TEST_PUBLIC_KEY_B64 = base64.b64encode(
+    _TEST_PRIVATE_KEY.publickey().export_key(format="DER")
+).decode("utf-8")
+
+
+def _decrypt_with_test_private_key(ciphertext_b64):
+    cipher = PKCS1_v1_5.new(_TEST_PRIVATE_KEY)
+    sentinel = object()
+    return cipher.decrypt(base64.b64decode(ciphertext_b64), sentinel).decode("utf-8")
 
 
 def _run_command(**options):
@@ -103,7 +121,9 @@ class ProbeCashReceiptSalesCommandTests(TestCase):
                     "twoWayTimestamp": 1735689600000,
                 },
             }
-            _run_command(**self.base_options)
+            # 이 테스트는 "물어보지 않는다"는 것만 확인하면 되므로 암호화는
+            # 끄고 identity 원문이 그대로 전달됐는지로 간단히 검증한다.
+            _run_command(**self.base_options, no_encrypt_identity=True)
 
         # .env 값이 있으면 물어보지 않아야 한다.
         mock_input.assert_not_called()
@@ -114,6 +134,42 @@ class ProbeCashReceiptSalesCommandTests(TestCase):
         self.assertEqual(sent_payload["phoneNo"], "01012345678")
         self.assertEqual(sent_payload["identity"], "20000101")
 
+    @patch.dict(os.environ, {"CODEF_PROBE_IDENTITY": "1234567890"})
+    @override_settings(CODEF_PUBLIC_KEY=_TEST_PUBLIC_KEY_B64)
+    def test_identity_is_encrypted_by_default_and_decrypts_back_to_original(self):
+        # 명령을 통째로 돌려서 실제로 전송되는 identity가 평문이 아니고,
+        # 대응하는 개인키로 복호화하면 원문 그대로 나오는지까지 확인한다 —
+        # encrypt_with_public_key() 단위 테스트와 별개로, 커맨드가 그 함수를
+        # 제대로 연결해서 쓰는지 보는 통합 테스트다.
+        mock_response = {"result": {"code": "CF-00000", "message": "성공"}, "data": []}
+        with patch(f"{_ENV_MODULE}.CodefClient") as mock_client_cls:
+            mock_client_cls.return_value.post.return_value = mock_response
+            output = _run_command(**self.base_options)
+
+        _, sent_payload = mock_client_cls.return_value.post.call_args[0]
+        self.assertNotEqual(sent_payload["identity"], "1234567890")
+        self.assertEqual(_decrypt_with_test_private_key(sent_payload["identity"]), "1234567890")
+        self.assertIn("RSA 암호화했습니다", output)
+
+    @patch.dict(os.environ, {"CODEF_PROBE_IDENTITY": "1234567890"})
+    def test_identity_encryption_without_public_key_raises_clear_command_error(self):
+        # CODEF_PUBLIC_KEY가 비어 있으면(.env.example 기본값), 알 수 없는
+        # crypto 라이브러리 예외가 아니라 알아볼 수 있는 CommandError가 나야 한다.
+        with override_settings(CODEF_PUBLIC_KEY=""):
+            with self.assertRaisesMessage(CommandError, "identity 암호화 실패"):
+                _run_command(**self.base_options)
+
+    @patch.dict(os.environ, {"CODEF_PROBE_IDENTITY": "1234567890"})
+    def test_no_encrypt_identity_sends_plaintext(self):
+        mock_response = {"result": {"code": "CF-00000", "message": "성공"}, "data": []}
+        with patch(f"{_ENV_MODULE}.CodefClient") as mock_client_cls:
+            mock_client_cls.return_value.post.return_value = mock_response
+            output = _run_command(**self.base_options, no_encrypt_identity=True)
+
+        _, sent_payload = mock_client_cls.return_value.post.call_args[0]
+        self.assertEqual(sent_payload["identity"], "1234567890")
+        self.assertIn("암호화하지 않고 평문으로 보냅니다", output)
+
     @patch.dict(
         os.environ,
         {
@@ -122,8 +178,8 @@ class ProbeCashReceiptSalesCommandTests(TestCase):
             "CODEF_PROBE_IDENTITY": "20000101",
         },
     )
-    def test_dry_run_output_masks_sensitive_fields(self):
-        output = _run_command(**self.base_options, dry_run=True)
+    def test_dry_run_output_masks_plaintext_identity_when_encryption_disabled(self):
+        output = _run_command(**self.base_options, dry_run=True, no_encrypt_identity=True)
 
         # 실제 값이 화면에 그대로 나오면 안 된다.
         self.assertNotIn("김지훈", output)
@@ -134,6 +190,22 @@ class ProbeCashReceiptSalesCommandTests(TestCase):
         self.assertIn('"userName": "***"', output)
         self.assertIn('"phoneNo": "010****5678"', output)
         self.assertIn('"identity": "********"', output)
+
+    @patch.dict(
+        os.environ,
+        {
+            "CODEF_PROBE_USER_NAME": "김지훈",
+            "CODEF_PROBE_PHONE_NO": "01012345678",
+            "CODEF_PROBE_IDENTITY": "20000101",
+        },
+    )
+    @override_settings(CODEF_PUBLIC_KEY=_TEST_PUBLIC_KEY_B64)
+    def test_dry_run_output_shows_encrypted_marker_by_default(self):
+        output = _run_command(**self.base_options, dry_run=True)
+
+        self.assertNotIn("20000101", output)
+        # 암호화된 값은 매번 랜덤이라 원문 길이로 마스킹하지 않고 고정 표시를 쓴다.
+        self.assertIn('"identity": "***encrypted***"', output)
 
     def test_first_request_has_no_two_way_fields(self):
         mock_response = {

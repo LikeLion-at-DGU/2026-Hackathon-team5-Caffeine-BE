@@ -1,38 +1,51 @@
-"""현금영수증 매출내역 Real CODEF 호출을 Django shell 대신 검증하는 실험용 명령.
+"""현금영수증 매출내역 Real CODEF 호출을 검증하는 실험용 관리 명령.
 
-정식 /codef-auth/, BusinessViewSet, Serializer는 건드리지 않는다 — "Django shell에서
-CODEF를 직접 호출해 성공부터 확인하고, 그 다음에 정식 API로 옮기자"는 방침 그대로,
-그 shell 호출을 반복 실행 가능한 명령으로 옮겨놓은 것뿐이다.
+정식 /codef-auth/, BusinessViewSet, Serializer는 건드리지 않고,
+CODEF 현금영수증 매출내역 상품을 카카오 간편인증으로 직접 검증한다.
 
-organization/path는 상품 페이지에서 확인한 값을 사용한다. 현재 현금영수증 매출내역
-상품 페이지에서 organization="0003"을 확인했으며, path는 해당 상품의 실제 Endpoint
-경로를 --path로 넘긴다.
+현재 확인한 CODEF 상품 명세 기준:
+- organization: "0003"
+- loginType: "5" = 회원 간편인증
+- loginTypeLevel: "1" = 카카오톡
+- userName: loginType="5"일 때 필수
+- loginIdentity: loginType="5"일 때 필수, 생년월일 8자리(YYYYMMDD)
+- phoneNo: loginType="5"일 때 필수
+- identity: 사용자 주민번호/사업자번호. 사업장이 2개 이상인 경우 필수
+- startDate / endDate: 필수(YYYYMMDD)
 
-사용자 이름·휴대폰 번호·identity(사용자 주민번호/사업자번호)는 CLI 플래그로 받지 않는다 — 셸
-history와 `ps aux` 같은 프로세스 목록에 그대로 남기 때문이다. 대신:
-  1) .env에 CODEF_PROBE_USER_NAME / CODEF_PROBE_PHONE_NO / CODEF_PROBE_IDENTITY를
-     로컬 테스트 전용으로 미리 넣어두면 그 값을 그대로 쓰고,
-  2) 없으면 실행 중에 물어본다 (전화번호·식별값은 getpass로 화면에 표시하지 않음).
-필요 없는 값은 그냥 Enter로 건너뛰면 된다.
+주의:
+- loginIdentity와 identity는 서로 다른 필드다.
+- 이 상품의 identity 항목에는 RSA 암호화 요구가 명시되어 있지 않으므로
+  이 명령에서는 identity를 임의로 RSA 암호화하지 않는다.
+- 사업장이 1개라면 CODEF_PROBE_IDENTITY를 비워 identity를 payload에서 생략할 수 있다.
+- 민감값은 CLI 인자로 직접 받지 않고 로컬 .env 또는 실행 중 입력으로 받는다.
 
-사용 예시 (1차 요청 — 카카오 간편인증 시작):
+.env 예시:
+    CODEF_PROBE_USER_NAME=홍길동
+    CODEF_PROBE_PHONE_NO=01012345678
+    CODEF_PROBE_LOGIN_IDENTITY=19760305
+    CODEF_PROBE_IDENTITY=
 
+1차 요청 예시:
     python manage.py probe_cash_receipt_sales \\
-        --business-id 1 \\
+        --business-id 2 \\
         --start-date 20260801 --end-date 20260803 \\
-        --organization <상품 페이지에서 확인한 값> \\
-        --path <상품 페이지에서 확인한 Endpoint>
+        --organization 0003 \\
+        --path /v1/kr/public/nt/cash-receipt/sales-details
 
-CF-03002가 나오면 사업자가 휴대폰에서 카카오 인증을 완료한 뒤, 2차 요청은
-상품 명세에서 확인한 simpleAuth 값을 명시적으로 넘겨 다시 실행한다 (loginTypeLevel
-의 "1"=카카오와는 다른 값이니 그대로 재사용하지 말 것):
+CF-03002가 나오면 사용자가 카카오 인증을 완료한 뒤 같은 상품으로 2차 요청한다.
+현금영수증 매출내역 명세상 simpleAuth는 "0": cancel, "1": ok 이므로
+인증 완료 후에는 --simple-auth 1을 사용한다.
 
+2차 요청 예시:
     python manage.py probe_cash_receipt_sales \\
-        --business-id 1 \\
+        --business-id 2 \\
         --start-date 20260801 --end-date 20260803 \\
-        --organization <위와 동일> --path <위와 동일> \\
-        --simple-auth <상품 명세에서 확인한 값> \\
-        --job-index 0 --thread-index 0 --jti <jti> --two-way-timestamp <timestamp>
+        --organization 0003 \\
+        --path /v1/kr/public/nt/cash-receipt/sales-details \\
+        --simple-auth 1 \\
+        --job-index 0 --thread-index 0 --jti <jti> \\
+        --two-way-timestamp <timestamp>
 """
 
 import getpass
@@ -67,9 +80,15 @@ _SENSITIVE_FIELD_SPECS = (
     ("userName", "CODEF_PROBE_USER_NAME", "홈택스 사용자 이름", False),
     ("phoneNo", "CODEF_PROBE_PHONE_NO", "휴대폰 번호", True),
     (
+        "loginIdentity",
+        "CODEF_PROBE_LOGIN_IDENTITY",
+        "카카오 인증자 생년월일 8자리(YYYYMMDD)",
+        True,
+    ),
+    (
         "identity",
         "CODEF_PROBE_IDENTITY",
-        "사용자 주민번호/사업자번호",
+        "사용자 주민번호/사업자번호 (사업장이 2개 이상인 경우 필수)",
         True,
     ),
 )
@@ -108,18 +127,21 @@ def _mask_phone(phone):
 
 
 def _masked_for_display(payload):
-    """출력 전용으로 민감 필드를 마스킹한 사본을 만든다.
-
-    실제로 CODEF에 보내는 payload는 이 함수를 거치지 않은 원본이다 — 여기서는
-    화면/터미널에 찍히는 내용만 가린다.
-    """
+    """출력 전용으로 민감 필드를 마스킹한 사본을 만든다."""
     masked = dict(payload)
+
     if masked.get("userName"):
         masked["userName"] = "***"
+
     if masked.get("phoneNo"):
         masked["phoneNo"] = _mask_phone(masked["phoneNo"])
+
+    if masked.get("loginIdentity"):
+        masked["loginIdentity"] = "*" * len(str(masked["loginIdentity"]))
+
     if masked.get("identity"):
         masked["identity"] = "*" * len(str(masked["identity"]))
+
     return masked
 
 
@@ -138,7 +160,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--organization",
             required=True,
-            help="현금영수증 매출내역 상품의 organization 값 (현재 확인값: 0003)",
+            help="현금영수증 매출내역 기관코드 (확인값: 0003)",
         )
         parser.add_argument(
             "--path",
@@ -146,8 +168,8 @@ class Command(BaseCommand):
             help="상품 페이지의 요청 Endpoint 경로 (예: /v1/kr/public/nt/...)",
         )
 
-        # 카카오 간편인증 코드값 — 현금영수증 '매입내역' 문서 예시 기준 기본값.
-        # '매출내역'도 동일한지는 상품 페이지에서 별도 확인이 필요하다.
+        # 현금영수증 매출내역 상품 명세에서 확인한 값.
+        # loginType='5'는 회원 간편인증, loginTypeLevel='1'은 카카오톡.
         parser.add_argument("--login-type", default="5")
         parser.add_argument("--login-type-level", default="1")
 
@@ -155,7 +177,7 @@ class Command(BaseCommand):
         # 별개의 파라미터라 기본값을 두지 않는다 — 상품 명세에서 확인해 넘긴다.
         parser.add_argument(
             "--simple-auth",
-            help="2차 요청 전용. 상품 명세에서 확인한 값 (loginTypeLevel과 혼동 금지)",
+            help='2차 요청 전용. 현금영수증 매출내역 명세: "0"=cancel, "1"=ok',
         )
 
         parser.add_argument(
@@ -164,7 +186,7 @@ class Command(BaseCommand):
             default=[],
             help=(
                 "상품 문서에 있는 추가 필수 필드. key=value 형식, 여러 번 지정 가능. "
-                "이름·전화번호·identity 등 민감값은 여기 넣지 말 것 — 실행 중 따로 물어본다."
+                "이름·전화번호·loginIdentity·identity 등 민감값은 여기 넣지 말 것."
             ),
         )
 
@@ -180,6 +202,7 @@ class Command(BaseCommand):
             help="CODEF로 실제 전송하지 않고 조립된 payload(민감값은 마스킹)만 출력한다.",
         )
 
+
     def handle(self, *args, **options):
         try:
             business = Business.objects.get(pk=options["business_id"])
@@ -191,7 +214,7 @@ class Command(BaseCommand):
         if business.business_number:
             self.stdout.write(
                 f"business_number={business.business_number} "
-                "(현금영수증 매출내역의 identity와 별도 값일 수 있으므로 상품 명세에 맞춰 입력하세요)"
+                "(참고용 DB 값. identity는 사업장이 2개 이상일 때 상품 명세에 맞춰 별도 입력)"
             )
 
         extra_fields = {}
@@ -217,6 +240,31 @@ class Command(BaseCommand):
             **extra_fields,
         }
 
+        # 현금영수증 매출내역 명세: loginType="5"이면 아래 값이 필수다.
+        if options["login_type"] == "5":
+            required_for_simple_auth = (
+                "loginTypeLevel",
+                "userName",
+                "loginIdentity",
+                "phoneNo",
+            )
+            missing = [
+                key
+                for key in required_for_simple_auth
+                if payload.get(key) in (None, "")
+            ]
+            if missing:
+                raise CommandError(
+                    "loginType='5'(회원 간편인증) 필수값이 누락되었습니다: "
+                    + ", ".join(missing)
+                )
+
+            login_identity = str(payload["loginIdentity"])
+            if not (login_identity.isdigit() and len(login_identity) == 8):
+                raise CommandError(
+                    "loginType='5'의 loginIdentity는 생년월일 8자리(YYYYMMDD)여야 합니다."
+                )
+
         two_way_values = {name: options[name] for name in TWO_WAY_ARG_NAMES}
         provided = [name for name, value in two_way_values.items() if value not in (None, "")]
 
@@ -234,7 +282,7 @@ class Command(BaseCommand):
                 raise CommandError(
                     "2차 요청에는 --simple-auth가 필요합니다 (기본값 없음). "
                     "loginTypeLevel(카카오 선택 값)과 다른 파라미터이니 상품 명세에서 "
-                    "확인한 simpleAuth 값을 그대로 넘기세요."
+                    "인증 완료 후에는 --simple-auth 1을 사용하세요."
                 )
             two_way_info = {
                 "jobIndex": two_way_values["job_index"],
@@ -252,7 +300,11 @@ class Command(BaseCommand):
             self.stdout.write("1차 요청을 조립했습니다.")
 
         self.stdout.write(
-            json.dumps(_masked_for_display(payload), ensure_ascii=False, indent=2)
+            json.dumps(
+                _masked_for_display(payload),
+                ensure_ascii=False,
+                indent=2,
+            )
         )
 
         if options["dry_run"]:
