@@ -181,6 +181,7 @@ CODEF_API_BASE_URL = os.environ.get("CODEF_API_BASE_URL", "").strip().rstrip("/"
 CODEF_TIMEOUT_SECONDS = float(
     os.environ.get("CODEF_TIMEOUT_SECONDS", "20")
 )
+CODEF_PUBLIC_KEY = os.environ.get("CODEF_PUBLIC_KEY", "").strip()
 
 PAYMENT_GATEWAY_MODE = "mock"
 
