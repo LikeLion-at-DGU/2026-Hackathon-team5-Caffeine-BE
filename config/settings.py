@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 import sys
 from dotenv import load_dotenv
+from cryptography.fernet import Fernet
 
 load_dotenv()
 
@@ -34,7 +35,8 @@ DEBUG = True
 APP_ENCRYPTION_KEY = (
     os.environ.get("APP_ENCRYPTION_KEY")
     or os.environ.get("PAYROLL_ENCRYPTION_KEY")  # 이전 배포 환경변수 호환
-    or ("ySLIQ7x5nymu0hMIhs4FDupeWcxDLIK4pd_yQm7RA9o=" if DEBUG else None)
+#   or ("ySLIQ7x5nymu0hMIhs4FDupeWcxDLIK4pd_yQm7RA9o=" if DEBUG else None)
+    or (Fernet.generate_key().decode() if "test" in sys.argv else None)
 )
 # 외부 브랜치나 기존 코드가 참조할 수 있어 한동안 호환 alias를 유지한다.
 PAYROLL_ENCRYPTION_KEY = APP_ENCRYPTION_KEY
@@ -170,7 +172,16 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CODEF_MODE = "mock"
+# CODEF_MODE = "mock"
+CODEF_MODE = os.environ.get("CODEF_MODE", "mock").strip().lower()
+
+CODEF_CLIENT_ID = os.environ.get("CODEF_CLIENT_ID", "").strip()
+CODEF_CLIENT_SECRET = os.environ.get("CODEF_CLIENT_SECRET", "").strip()
+CODEF_API_BASE_URL = os.environ.get("CODEF_API_BASE_URL", "").strip().rstrip("/")
+CODEF_TIMEOUT_SECONDS = float(
+    os.environ.get("CODEF_TIMEOUT_SECONDS", "20")
+)
+
 PAYMENT_GATEWAY_MODE = "mock"
 
 REST_FRAMEWORK = {
