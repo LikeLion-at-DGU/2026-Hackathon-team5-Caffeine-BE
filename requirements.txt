@@ -7,3 +7,4 @@ reportlab==5.0.0
 openpyxl==3.1.5
 openai==3.1.0
 requests==2.34.2
+gunicorn==23.0.0
