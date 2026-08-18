@@ -75,9 +75,10 @@ INSTALLED_APPS = [
     'analytics',
     'transactions',
     'settings',
-    "reports",
-    "tax",
-    "chat",
+    'reports',
+    'tax',
+    'chat',
+    'benchmark',
 ]
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -191,6 +192,10 @@ CODEF_TIMEOUT_SECONDS = float(
     os.environ.get("CODEF_TIMEOUT_SECONDS", "20")
 )
 CODEF_PUBLIC_KEY = os.environ.get("CODEF_PUBLIC_KEY", "").strip()
+
+SEOUL_DATA_API_KEY = os.environ.get("SEOUL_DATA_API_KEY", "50645279656a35373938654e4e424d").strip()
+SEOUL_DATA_API_BASE_URL = os.environ.get("SEOUL_DATA_API_BASE_URL", "http://openapi.seoul.go.kr:8088").strip().rstrip("/")
+SEOUL_DATA_TIMEOUT_SECONDS = float(os.environ.get("SEOUL_DATA_TIMEOUT_SECONDS", "10"))
 
 PAYMENT_GATEWAY_MODE = "mock"
 
