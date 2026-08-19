@@ -2,22 +2,19 @@ from abc import ABC, abstractmethod
 
 
 class CodefBusinessAccessError(ValueError):
-    """요청한 사업장과 CODEF 조회 연결을 안전하게 매핑할 수 없을 때 발생한다."""
+    """요청 사업장과 CODEF 연결을 안전하게 매핑할 수 없을 때 발생한다."""
 
 
 class BaseCodefProvider(ABC):
     """CODEF 연동 Provider의 공통 인터페이스.
 
-    Service에서는 CODEF의 실제 응답 구조를 직접 다루지 않고,
-    Provider가 정리한 공통 형식만 사용한다.
-
-    MockProvider는 개발용 응답을 반환하고,
-    RealProvider는 실제 CODEF 응답을 같은 형식으로 변환한다.
+    Service는 Mock/Real 구현을 구분하지 않고 이 인터페이스를 통해
+    CODEF 인증 및 거래 조회 기능을 사용한다.
     """
 
     @abstractmethod
     def ensure_business_access(self, business, source_type):
-        """거래 소스 조회가 요청 Business 소유의 연결을 사용하는지 검증한다."""
+        """해당 거래 소스를 조회할 수 있는 CODEF 연결 상태인지 확인한다."""
         raise NotImplementedError
 
     @abstractmethod
@@ -40,50 +37,89 @@ class BaseCodefProvider(ABC):
 
     @abstractmethod
     def request_auth(self, business, connection_type):
-        """CARD 또는 HOMETAX 연결을 요청한다.
+        """기존 CODEF 연결 인증 요청 인터페이스.
 
-        반환 예시:
-        {
-            "outcome": "SUCCESS" | "AUTH_REQUIRED" | "FAILURE",
-            "connected_id": str,
-            "continue_2way": bool,
-            "method": str,
-            "job_index": int,
-            "thread_index": int,
-            "jti": str,
-            "two_way_timestamp": int,
-            "error_code": str,
-            "error_message": str,
-        }
+        Transaction Sync 과정에서 발생하는 2-way 추가인증과는 별도로
+        기존 codef-auth API에서 사용한다.
         """
         raise NotImplementedError
 
     @abstractmethod
     def retry_auth(self, business, connection):
-        """저장된 2-way 정보를 사용해 HOMETAX 인증을 재시도한다."""
+        """기존 CODEF 연결 인증 재시도 인터페이스."""
         raise NotImplementedError
 
     @abstractmethod
-    def get_business_card_purchases(self, business, start_date, end_date):
-        """사업용 신용카드 매입 원본 응답을 반환한다."""
+    def get_business_card_purchases(
+        self,
+        business,
+        start_date,
+        end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
+    ):
+        """사업용 신용카드 매입 원본 응답을 반환한다.
+
+        two_way_info와 simple_auth가 전달되면 동일 상품 endpoint에
+        2-way 추가인증 정보를 포함해 재요청한다.
+        """
         raise NotImplementedError
 
     @abstractmethod
-    def get_cash_receipt_sales(self, business, start_date, end_date):
-        """현금영수증 매출 원본 응답을 반환한다."""
+    def get_cash_receipt_sales(
+        self,
+        business,
+        start_date,
+        end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
+    ):
+        """현금영수증 매출 원본 응답을 반환한다.
+
+        two_way_info와 simple_auth가 전달되면 2-way 재요청으로 처리한다.
+        """
         raise NotImplementedError
 
     @abstractmethod
-    def get_tax_invoice_purchases(self, business, start_date, end_date):
-        """전자세금계산서 매입 원본 응답을 반환한다."""
+    def get_tax_invoice_purchases(
+        self,
+        business,
+        start_date,
+        end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
+    ):
+        """전자세금계산서 매입 원본 응답을 반환한다.
+
+        two_way_info와 simple_auth가 전달되면 2-way 재요청으로 처리한다.
+        """
         raise NotImplementedError
 
     @abstractmethod
-    def get_tax_invoice_sales(self, business, start_date, end_date):
-        """전자세금계산서 매출 원본 응답을 반환한다."""
+    def get_tax_invoice_sales(
+        self,
+        business,
+        start_date,
+        end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
+    ):
+        """전자세금계산서 매출 원본 응답을 반환한다.
+
+        two_way_info와 simple_auth가 전달되면 2-way 재요청으로 처리한다.
+        """
         raise NotImplementedError
 
     @abstractmethod
-    def get_credit_card_sales_summary(self, business, start_date, end_date):
-        """신용카드 월별 매출 집계 원본 응답을 반환한다."""
+    def get_credit_card_sales_summary(
+        self,
+        business,
+        start_date,
+        end_date,
+    ):
+        """공동인증서 기반 신용카드 월별 매출 집계 원본 응답을 반환한다."""
         raise NotImplementedError

@@ -16,10 +16,16 @@ from .serializers import (
     TransactionPurposeUpdateSerializer,
     TransactionSerializer,
     TransactionSyncRequestSerializer,
+    TransactionSyncRetryRequestSerializer,
 )
 from .services.normalizers.helpers import TransactionNormalizationError
 from .services.querysets import with_pending_duplicate_flag
-from .services.sync_service import TransactionSourceMismatchError, TransactionSyncService
+from .services.sync_service import (
+    NoPendingTwoWayAuthError,
+    PendingTwoWayAuthError,
+    TransactionSourceMismatchError,
+    TransactionSyncService,
+)
 
 
 def _paginated_data(
@@ -114,6 +120,13 @@ class TransactionSyncView(APIView):
                 end_date=params["end_date"],
                 sources=params["sources"],
             )
+        except PendingTwoWayAuthError as exc:
+            return error_response(
+                code="CODEF_TWO_WAY_AUTH_PENDING",
+                message="이미 진행 중인 카카오 인증 요청이 있습니다.",
+                errors={"detail": str(exc)},
+                status=409,
+            )
         except (TransactionNormalizationError, TransactionSourceMismatchError) as exc:
             return error_response(
                 code="CODEF_TRANSACTION_DATA_ERROR",
@@ -129,9 +142,73 @@ class TransactionSyncView(APIView):
                 status=502,
             )
 
+        if result["outcome"] == "AUTH_REQUIRED":
+            return success_response(
+                code="CODEF_TWO_WAY_AUTH_REQUIRED",
+                message="카카오 추가인증이 필요합니다. 인증 후 재시도해주세요.",
+                data=result,
+            )
+
         return success_response(
             code="TRANSACTION_SYNC_SUCCESS",
             message="거래 데이터를 동기화했습니다.",
+            data=result,
+        )
+
+
+class TransactionSyncRetryView(APIView):
+    """카카오 2-way 인증 완료 후, 대기 중이던 거래 조회를 재개한다.
+
+    business_id만 받는다 — 어떤 상품/기간을 재요청할지는
+    CodefConnection.pending_*에 저장된 값으로 서버가 판단한다.
+    """
+
+    def post(self, request):
+        serializer = TransactionSyncRetryRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                code="INVALID_TRANSACTION_SYNC_RETRY_REQUEST",
+                message="거래 동기화 재시도 요청이 올바르지 않습니다.",
+                errors=serializer.errors,
+            )
+
+        business = serializer.validated_data["business"]
+
+        try:
+            result = TransactionSyncService().retry(business)
+        except NoPendingTwoWayAuthError as exc:
+            return error_response(
+                code="CODEF_NO_PENDING_TWO_WAY_AUTH",
+                message="재시도할 카카오 추가인증 요청이 없습니다.",
+                errors={"detail": str(exc)},
+                status=409,
+            )
+        except (TransactionNormalizationError, TransactionSourceMismatchError) as exc:
+            return error_response(
+                code="CODEF_TRANSACTION_DATA_ERROR",
+                message="CODEF 거래 데이터를 처리하지 못했습니다.",
+                errors={"detail": str(exc)},
+                status=502,
+            )
+        except NotImplementedError as exc:
+            return error_response(
+                code="CODEF_TRANSACTION_SOURCE_UNAVAILABLE",
+                message="현재 모드에서는 거래 데이터 소스를 사용할 수 없습니다.",
+                errors={"detail": str(exc)},
+                status=502,
+            )
+
+        if result["outcome"] == "AUTH_REQUIRED":
+            # N차 인증 케이스: 재시도했는데 또 추가인증이 필요한 경우.
+            return success_response(
+                code="CODEF_TWO_WAY_AUTH_REQUIRED",
+                message="카카오 추가인증이 필요합니다. 인증 후 다시 재시도해주세요.",
+                data=result,
+            )
+
+        return success_response(
+            code="TRANSACTION_SYNC_RETRY_SUCCESS",
+            message="거래 동기화를 재개했습니다.",
             data=result,
         )
 

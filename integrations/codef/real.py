@@ -10,6 +10,7 @@ from .base import BaseCodefProvider, CodefBusinessAccessError
 from .client import (
     CodefClient,
     CodefClientError,
+    build_two_way_payload,
     encrypt_with_public_key,
 )
 
@@ -288,6 +289,32 @@ class RealCodefProvider(BaseCodefProvider):
                 fields[field_name] = value
 
         return fields
+
+    def _post_maybe_two_way(
+        self,
+        path,
+        payload,
+        *,
+        two_way_info=None,
+        simple_auth=None,
+    ):
+        """CODEF 거래 조회의 1차 요청 또는 2-way 재요청을 수행한다.
+
+        two_way_info와 simple_auth가 전달되면 기존 payload에
+        simpleAuth / is2Way / twoWayInfo를 추가해 동일 endpoint로 재요청한다.
+
+        CODEF 2-way는 별도의 인증 API를 호출하는 방식이 아니라,
+        인증이 발생한 거래 상품을 동일 endpoint로 다시 요청하는 구조다.
+        """
+
+        if two_way_info is not None and simple_auth is not None:
+            payload = build_two_way_payload(
+                payload,
+                two_way_info,
+                simple_auth=simple_auth,
+            )
+
+        return self.client.post(path, payload)
 
     def _get_hometax_simple_auth_fields(
         self,
@@ -572,7 +599,7 @@ class RealCodefProvider(BaseCodefProvider):
         }
 
     # ==================================================
-    # 인증
+    # 기존 CODEF 연결 인증
     # ==================================================
 
     def request_auth(
@@ -580,8 +607,11 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         connection_type,
     ):
-        # 현재 거래 실조회는 각 상품 API 자체에서
-        # 카카오 간편인증을 요청하는 방식으로 검증했다.
+        """기존 codef-auth API용 연결 인증 인터페이스.
+
+        Transaction Sync 과정에서 발생하는 거래별 2-way 추가인증과는
+        별도의 흐름이다.
+        """
         raise NotImplementedError(
             "Real CODEF 공통 인증 요청은 "
             "아직 별도 구현되지 않았습니다."
@@ -592,6 +622,7 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         connection,
     ):
+        """기존 codef-auth API용 연결 인증 재시도 인터페이스."""
         raise NotImplementedError(
             "Real CODEF 공통 인증 재시도는 "
             "아직 별도 구현되지 않았습니다."
@@ -606,15 +637,18 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         start_date,
         end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
     ):
         """사업용 신용카드 매입 원본 CODEF 응답을 반환한다.
 
-        CODEF 해당 상품은 월별 조회 시:
-        searchType="1"
-        startDate=YYYYMM
+        최초 호출에서는 카카오 간편인증을 포함한 1차 요청을 수행한다.
+        two_way_info와 simple_auth가 전달되면 동일 상품의 2-way 재요청을
+        수행한다.
 
-        현재 TransactionSyncService 인터페이스는 start/end date를 받으므로
-        동일 월 범위만 Real 조회하도록 제한한다.
+        이 상품은 월 단위 조회이므로 start_date와 end_date는
+        같은 월이어야 한다.
         """
 
         if not self._same_month(
@@ -662,9 +696,11 @@ class RealCodefProvider(BaseCodefProvider):
             "detailYN": "1",
         }
 
-        return self.client.post(
+        return self._post_maybe_two_way(
             self.BUSINESS_CARD_PURCHASE_PATH,
             payload,
+            two_way_info=two_way_info,
+            simple_auth=simple_auth,
         )
 
     # ==================================================
@@ -676,8 +712,15 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         start_date,
         end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
     ):
-        """현금영수증 매출 원본 CODEF 응답을 반환한다."""
+        """현금영수증 매출 원본 CODEF 응답을 반환한다.
+
+        two_way_info와 simple_auth가 전달되면 동일 상품 endpoint로
+        2-way 추가인증 재요청을 수행한다.
+        """
 
         auth_fields = (
             self._get_hometax_simple_auth_fields(
@@ -713,9 +756,11 @@ class RealCodefProvider(BaseCodefProvider):
             "orderBy": "0",
         }
 
-        return self.client.post(
+        return self._post_maybe_two_way(
             self.CASH_RECEIPT_SALES_PATH,
             payload,
+            two_way_info=two_way_info,
+            simple_auth=simple_auth,
         )
 
     # ==================================================
@@ -727,8 +772,16 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         start_date,
         end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
     ):
-        """전자세금계산서 매입 원본 CODEF 응답을 반환한다."""
+        """전자세금계산서 매입 원본 CODEF 응답을 반환한다.
+
+        transeType="02"로 매입 자료를 조회한다.
+        two_way_info와 simple_auth가 전달되면 동일 조회 조건으로
+        2-way 추가인증 재요청을 수행한다.
+        """
 
         auth_fields = (
             self._get_hometax_simple_auth_fields(
@@ -782,9 +835,11 @@ class RealCodefProvider(BaseCodefProvider):
             "pageCount": "40",
         }
 
-        return self.client.post(
+        return self._post_maybe_two_way(
             self.TAX_INVOICE_PATH,
             payload,
+            two_way_info=two_way_info,
+            simple_auth=simple_auth,
         )
 
     # ==================================================
@@ -796,8 +851,16 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         start_date,
         end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
     ):
-        """전자세금계산서 매출 원본 CODEF 응답을 반환한다."""
+        """전자세금계산서 매출 원본 CODEF 응답을 반환한다.
+
+        transeType="01"로 매출 자료를 조회한다.
+        two_way_info와 simple_auth가 전달되면 동일 조회 조건으로
+        2-way 추가인증 재요청을 수행한다.
+        """
 
         auth_fields = (
             self._get_hometax_simple_auth_fields(
@@ -851,9 +914,11 @@ class RealCodefProvider(BaseCodefProvider):
             "pageCount": "40",
         }
 
-        return self.client.post(
+        return self._post_maybe_two_way(
             self.TAX_INVOICE_PATH,
             payload,
+            two_way_info=two_way_info,
+            simple_auth=simple_auth,
         )
 
     # ==================================================
@@ -866,16 +931,19 @@ class RealCodefProvider(BaseCodefProvider):
         start_date,
         end_date,
     ):
-        """신용카드 월별 매출자료 원본 CODEF 응답을 반환한다.
+        """공동인증서 기반 신용카드 월별 매출자료를 조회한다.
 
-        CODEF 공식 명세 기준:
+        CODEF 명세 기준:
         - organization="0006"
-        - 공동인증서 certFile / certPassword / certType 사용
+        - certFile / certPassword / certType 사용
         - year=YYYY
-        - startDate / endDate는 날짜가 아니라 조회 분기("1"~"4")
+        - startDate / endDate는 조회 분기("1"~"4")
 
-        API 입력에 사업자번호(identity) 필드가 없으므로 business는
-        Provider 인터페이스 호환을 위해 전달받되 payload에는 넣지 않는다.
+        카카오 간편인증 상품이 아니므로 Transaction Sync의
+        2-way 추가인증 흐름을 사용하지 않는다.
+
+        API 입력에 사업자번호(identity)가 없어 business는
+        Provider 인터페이스 호환을 위해서만 전달받는다.
         """
 
         start_year = self._format_year(start_date)
