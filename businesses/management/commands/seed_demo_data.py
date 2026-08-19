@@ -54,7 +54,7 @@ class Command(BaseCommand):
                 connection_type=connection_type,
                 defaults={
                     "status": "CONNECTED",
-                    "connected_id": f"mock-{connection_type.lower()}-{business.id}",
+                    "connected_id": f"cid-{connection_type.lower()}-{business.id}",
                 },
             )
 

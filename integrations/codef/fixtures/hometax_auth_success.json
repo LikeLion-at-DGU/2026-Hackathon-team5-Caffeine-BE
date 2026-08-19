@@ -1,14 +1,14 @@
 {
   "result": {
-    "code": "MOCK-00000",
-    "message": "mock 2-way authentication success"
+    "code": "CF-00000",
+    "message": "성공"
   },
   "data": {
     "continue2Way": false,
     "method": "simpleAuth",
     "jobIndex": 0,
     "threadIndex": 0,
-    "jti": "mock-jti-001",
+    "jti": "jti-hometax-202608-001",
     "twoWayTimestamp": 1786500012345
   }
 }

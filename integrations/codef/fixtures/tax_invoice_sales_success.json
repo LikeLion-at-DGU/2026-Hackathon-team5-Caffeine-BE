@@ -1,9 +1,9 @@
 {
   "result": {
-    "code": "MOCK-00000",
+    "code": "CF-00000",
     "extraMessage": "",
-    "message": "mock success",
-    "transactionId": "mock-tax-invoice-sales-202608"
+    "message": "성공",
+    "transactionId": "tx-tax-invoice-sales-202608"
   },
   "data": {
     "resSupplyValue": "120000",
@@ -46,7 +46,7 @@
     "resIssueNm": "",
     "resTaxAmt": "12000",
     "resIssueDate": "20260821",
-    "resApprovalNo": "MOCK-20260821-S001",
+    "resApprovalNo": "20260821-41000203-0004a791",
 
     "resTradeItemList": [
       {

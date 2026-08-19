@@ -1,9 +1,9 @@
 {
   "result": {
-    "code": "MOCK-00000",
+    "code": "CF-00000",
     "extraMessage": "",
-    "message": "mock success",
-    "transactionId": "mock-credit-card-sales-2026-q3"
+    "message": "성공",
+    "transactionId": "tx-credit-card-sales-2026-q3"
   },
   "data": {
     "resSalesHistoryList": [

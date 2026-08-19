@@ -1,9 +1,9 @@
 {
   "result": {
-    "code": "MOCK-00000",
-    "message": "mock card connected"
+    "code": "CF-00000",
+    "message": "성공"
   },
   "data": {
-    "connectedId": "mock-connected-id-0001"
+    "connectedId": "cid-card-caffeine-0001"
   }
 }

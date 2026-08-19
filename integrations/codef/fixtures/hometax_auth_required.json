@@ -1,14 +1,14 @@
 {
   "result": {
-    "code": "MOCK-AUTH-REQUIRED",
-    "message": "mock 2-way authentication required"
+    "code": "CF-10001",
+    "message": "추가인증(2-Way)이 필요합니다."
   },
   "data": {
     "continue2Way": true,
     "method": "simpleAuth",
     "jobIndex": 0,
     "threadIndex": 0,
-    "jti": "mock-jti-001",
+    "jti": "jti-hometax-202608-001",
     "twoWayTimestamp": 1786500000000
   }
 }

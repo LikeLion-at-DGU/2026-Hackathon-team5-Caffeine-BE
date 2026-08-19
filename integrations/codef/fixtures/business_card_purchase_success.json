@@ -1,9 +1,9 @@
 {
   "result": {
-    "code": "MOCK-00000",
+    "code": "CF-00000",
     "extraMessage": "",
-    "message": "mock success",
-    "transactionId": "mock-business-card-purchase-202608"
+    "message": "성공",
+    "transactionId": "tx-business-card-202608"
   },
   "data": {
     "resCompanyIdentityNo": "1234567890",
