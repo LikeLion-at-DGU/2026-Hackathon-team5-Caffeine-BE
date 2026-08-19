@@ -19,7 +19,7 @@ class CodefAuthTests(APITestCase):
 
         conn = CodefConnection.objects.get(business=self.business, connection_type="HOMETAX")
         self.assertTrue(conn.continue_2way)
-        self.assertEqual(conn.jti, "mock-jti-001")
+        self.assertEqual(conn.jti, "6a856fb5b0dbfb42a534c85c")
         self.assertIsInstance(conn.two_way_timestamp, int)
 
     def test_card_auth_request_sets_connected(self):
@@ -34,7 +34,7 @@ class CodefAuthTests(APITestCase):
     def test_request_marks_failed_when_outcome_is_failure(self):
         business = self.business
         url = reverse("business-codef-auth", kwargs={"pk": business.id})
-        fail_result = {"outcome": "FAILURE", "error_code": "MOCK-90000", "error_message": "mock failure"}
+        fail_result = {"outcome": "FAILURE", "error_code": "CF-99999", "error_message": "CODEF 통신 실패"}
         with patch("businesses.services.codef_auth_service.get_codef_provider") as mock_factory:
             mock_factory.return_value.request_auth.return_value = fail_result
             res = self.client.post(url, {"connection_type": "HOMETAX"}, format="json")
@@ -43,7 +43,7 @@ class CodefAuthTests(APITestCase):
         self.assertEqual(res.data["data"]["status"], "FAILED")
         conn = CodefConnection.objects.get(business=business, connection_type="HOMETAX")
         self.assertEqual(conn.status, "FAILED")
-        self.assertEqual(conn.last_error_code, "MOCK-90000")
+        self.assertEqual(conn.last_error_code, "CF-99999")
         self.assertFalse(conn.continue_2way)  # 실패인데 2-way 값이 남아있으면 버그
 
     def test_request_success_clears_stale_error_from_previous_failure(self):

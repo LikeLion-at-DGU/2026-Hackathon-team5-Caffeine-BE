@@ -9,9 +9,9 @@ FIXTURES_DIR = os.path.join(
     "fixtures",
 )
 
-# Mock 응답 상태 코드
-_SUCCESS = "MOCK-00000"
-_AUTH_REQUIRED = "MOCK-AUTH-REQUIRED"
+# CODEF 표준 응답 상태 코드 (실제 CODEF 규격과 일치)
+_SUCCESS = "CF-00000"
+_AUTH_REQUIRED = "CF-03002"
 
 
 def load_fixture(filename):

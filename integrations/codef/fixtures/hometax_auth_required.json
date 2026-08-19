@@ -1,14 +1,19 @@
 {
   "result": {
-    "code": "MOCK-AUTH-REQUIRED",
-    "message": "mock 2-way authentication required"
+    "code": "CF-03002",
+    "extraMessage": "API 요청 처리가 정상 진행 중입니다. 추가 정보를 입력하세요.",
+    "message": "성공",
+    "transactionId": "6a856fb5b0dbfb42a534c85c"
   },
   "data": {
-    "continue2Way": true,
-    "method": "simpleAuth",
     "jobIndex": 0,
     "threadIndex": 0,
-    "jti": "mock-jti-001",
-    "twoWayTimestamp": 1786500000000
+    "jti": "6a856fb5b0dbfb42a534c85c",
+    "twoWayTimestamp": 1787129784947,
+    "continue2Way": true,
+    "extraInfo": {
+      "commSimpleAuth": ""
+    },
+    "method": "simpleAuth"
   }
 }

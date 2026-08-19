@@ -1,9 +1,9 @@
 {
   "result": {
-    "code": "MOCK-00000",
+    "code": "CF-00000",
     "extraMessage": "",
-    "message": "mock success",
-    "transactionId": "mock-tax-invoice-purchase-202608"
+    "message": "성공",
+    "transactionId": "tx-tax-invoice-purchase-202608"
   },
   "data": [
     {
@@ -46,7 +46,7 @@
       "resIssueNm": "",
       "resTaxAmt": "105000",
       "resIssueDate": "20260814",
-      "resApprovalNo": "MOCK-20260814-P001",
+      "resApprovalNo": "20260814-41000203-0004a781",
 
       "resTradeItemList": [
         {
@@ -116,7 +116,7 @@
       "resIssueNm": "",
       "resTaxAmt": "57000",
       "resIssueDate": "20260827",
-      "resApprovalNo": "MOCK-20260827-P002",
+      "resApprovalNo": "20260827-41000203-0004a782",
 
       "resTradeItemList": [
         {
@@ -186,7 +186,7 @@
       "resIssueNm": "",
       "resTaxAmt": "24000",
       "resIssueDate": "20260808",
-      "resApprovalNo": "MOCK-20260808-P003",
+      "resApprovalNo": "20260808-41000203-0004a783",
 
       "resTradeItemList": [
         {
@@ -246,7 +246,7 @@
       "resIssueNm": "",
       "resTaxAmt": "18000",
       "resIssueDate": "20260811",
-      "resApprovalNo": "MOCK-20260811-P004",
+      "resApprovalNo": "20260811-41000203-0004a784",
 
       "resTradeItemList": [
         {
@@ -306,7 +306,7 @@
       "resIssueNm": "",
       "resTaxAmt": "21000",
       "resIssueDate": "20260818",
-      "resApprovalNo": "MOCK-20260818-P005",
+      "resApprovalNo": "20260818-41000203-0004a785",
 
       "resTradeItemList": [
         {
@@ -366,7 +366,7 @@
       "resIssueNm": "",
       "resTaxAmt": "16000",
       "resIssueDate": "20260823",
-      "resApprovalNo": "MOCK-20260823-P006",
+      "resApprovalNo": "20260823-41000203-0004a786",
 
       "resTradeItemList": [
         {

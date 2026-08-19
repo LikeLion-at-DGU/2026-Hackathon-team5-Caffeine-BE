@@ -1,9 +1,10 @@
 {
-    "code": "MOCK-00000",
-    "message": "mock success",
+    "code": "CF-00000",
+    "message": "성공",
     "extraMessage": null,
     "resCompanyIdentityNo": "1234567890",
     "resBusinessStatus": "계속사업자",
+    "taxation_type_code": "1",
     "resTaxationTypeCode": "1",
     "resClosingDate": "",
     "resTransferTaxTypeDate": "20260101"
