@@ -113,3 +113,25 @@ class ChatServiceTests(TestCase):
 
         self.assertEqual(assistant_message.reply_to, user_message)
         self.assertEqual(assistant_message.metadata["responder"], "EXTERNAL_RESPONDER")
+
+    def test_withholding_tax_question_returns_due_date_and_labor_info(self):
+        reply = RuleBasedChatResponder().reply(
+            business=self.business,
+            message="원천세 납부일 언제야?",
+            year=2026,
+            month=8,
+        )
+        self.assertEqual(reply.metadata["intent"], "WITHHOLDING_TAX")
+        self.assertIn("10일", reply.content)
+        self.assertIn("소득세법", reply.content)
+
+    def test_tax_saving_question_returns_distinct_guide(self):
+        reply = RuleBasedChatResponder().reply(
+            business=self.business,
+            message="부가세 절세 방법 알려줘",
+            year=2026,
+            month=8,
+        )
+        self.assertEqual(reply.metadata["intent"], "TAX_SAVING_GUIDE")
+        self.assertIn("의제매입세액", reply.content)
+        self.assertIn("사업용 신용카드", reply.content)
