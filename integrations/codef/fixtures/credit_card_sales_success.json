@@ -3,33 +3,65 @@
     "code": "CF-00000",
     "extraMessage": "",
     "message": "성공",
-    "transactionId": "tx-credit-card-sales-2026-q3"
+    "transactionId": "6a856fba10ecdc3849bb4109"
   },
   "data": {
     "resSalesHistoryList": [
       {
+        "resYearMonth": "202603",
+        "resCount": "614",
+        "resTotalAmount": "8724500",
+        "resPaymentAmt": "8724500",
+        "resPaymentAmt1": "0",
+        "resCashBack": "0"
+      },
+      {
+        "resYearMonth": "202604",
+        "resCount": "587",
+        "resTotalAmount": "8142300",
+        "resPaymentAmt": "8142300",
+        "resPaymentAmt1": "0",
+        "resCashBack": "0"
+      },
+      {
+        "resYearMonth": "202605",
+        "resCount": "698",
+        "resTotalAmount": "9481200",
+        "resPaymentAmt": "9481200",
+        "resPaymentAmt1": "0",
+        "resCashBack": "0"
+      },
+      {
+        "resYearMonth": "202606",
+        "resCount": "713",
+        "resTotalAmount": "9895400",
+        "resPaymentAmt": "9895400",
+        "resPaymentAmt1": "0",
+        "resCashBack": "0"
+      },
+      {
         "resYearMonth": "202607",
-        "resCount": "612",
-        "resTotalAmount": "8340000",
-        "resPaymentAmt": "8340000",
+        "resCount": "729",
+        "resTotalAmount": "10128700",
+        "resPaymentAmt": "10128700",
         "resPaymentAmt1": "0",
         "resCashBack": "0"
       },
       {
         "resYearMonth": "202608",
-        "resCount": "651",
-        "resTotalAmount": "9120000",
-        "resPaymentAmt": "9120000",
+        "resCount": "764",
+        "resTotalAmount": "10746800",
+        "resPaymentAmt": "10746800",
         "resPaymentAmt1": "0",
         "resCashBack": "0"
       }
     ],
     "resTotalList": [
       {
-        "resQuarter": "3",
+        "resQuarter": "2026-H1",
         "resType": "신용카드",
-        "resCount": "1263",
-        "resTotalAmount": "17460000"
+        "resCount": "4105",
+        "resTotalAmount": "57118900"
       }
     ],
     "resSalesHistoryList1": []
