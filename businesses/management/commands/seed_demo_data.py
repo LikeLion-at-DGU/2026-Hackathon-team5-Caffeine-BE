@@ -12,6 +12,8 @@ from transactions.models import MonthlySalesSummary, Transaction
 from transactions.services.sync_service import TransactionSyncService
 
 
+from integrations.codef.mock import MockCodefProvider
+
 class Command(BaseCommand):
     help = "CODEF Mock부터 거래·세금·급여·리포트까지 2026-08 데모 흐름을 생성합니다."
 
@@ -30,13 +32,17 @@ class Command(BaseCommand):
 
         if options["reset"]:
             Business.objects.filter(
+                id=1,
+            ).delete()
+            Business.objects.filter(
                 business_number=business_number,
                 is_demo=True,
             ).delete()
 
         business, _ = Business.objects.update_or_create(
-            business_number=business_number,
+            id=1,
             defaults={
+                "business_number": business_number,
                 "business_name": "카페비서 데모 매장",
                 "representative_name": "데모 사장님",
                 "business_type": "음식점업",
@@ -58,7 +64,7 @@ class Command(BaseCommand):
                 },
             )
 
-        sync_result = TransactionSyncService().sync(
+        sync_result = TransactionSyncService(provider=MockCodefProvider()).sync(
             business=business,
             start_date=start_date,
             end_date=end_date,
