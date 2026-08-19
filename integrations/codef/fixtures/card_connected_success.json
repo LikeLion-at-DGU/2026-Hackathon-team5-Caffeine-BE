@@ -1,9 +1,11 @@
 {
   "result": {
     "code": "CF-00000",
-    "message": "성공"
+    "extraMessage": "",
+    "message": "성공",
+    "transactionId": "5f19e7a03bc214d89a72e810"
   },
   "data": {
-    "connectedId": "cid-card-caffeine-0001"
+    "connectedId": "8f2c9d17a46e4b63b391c7f5a820de41"
   }
 }

@@ -67,7 +67,7 @@ class CodefTransactionNormalizerTests(SimpleTestCase):
         self.assertEqual(len(items), 10)
         self.assertTrue(all(item.transaction_type == Transaction.TransactionType.SALE for item in items))
         self.assertEqual(items[0].transaction_time, time(9, 15, 23))
-        self.assertEqual(items[0].approval_no, "20260802-CR-001")
+        self.assertEqual(items[0].approval_no, "095040641")
         self.assertEqual(items[0].merchant_name, "")
 
     def test_tax_invoice_purchase_and_sale_shapes_are_both_supported(self):

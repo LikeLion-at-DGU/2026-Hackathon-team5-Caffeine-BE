@@ -1,14 +1,16 @@
 {
   "result": {
     "code": "CF-00000",
-    "message": "성공"
+    "extraMessage": "",
+    "message": "성공",
+    "transactionId": "6a856fb5b0dbfb42a534c85c"
   },
   "data": {
-    "continue2Way": false,
-    "method": "simpleAuth",
     "jobIndex": 0,
     "threadIndex": 0,
-    "jti": "jti-hometax-202608-001",
-    "twoWayTimestamp": 1786500012345
+    "jti": "6a856fb5b0dbfb42a534c85c",
+    "twoWayTimestamp": 1787129784947,
+    "continue2Way": false,
+    "method": "simpleAuth"
   }
 }

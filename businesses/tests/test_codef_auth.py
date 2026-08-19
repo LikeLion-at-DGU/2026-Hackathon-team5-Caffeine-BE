@@ -19,7 +19,7 @@ class CodefAuthTests(APITestCase):
 
         conn = CodefConnection.objects.get(business=self.business, connection_type="HOMETAX")
         self.assertTrue(conn.continue_2way)
-        self.assertEqual(conn.jti, "jti-hometax-202608-001")
+        self.assertEqual(conn.jti, "6a856fb5b0dbfb42a534c85c")
         self.assertIsInstance(conn.two_way_timestamp, int)
 
     def test_card_auth_request_sets_connected(self):
