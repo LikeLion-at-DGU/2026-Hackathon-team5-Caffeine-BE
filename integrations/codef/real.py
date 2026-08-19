@@ -1,4 +1,6 @@
+import base64
 import os
+from pathlib import Path
 
 import requests
 
@@ -177,38 +179,62 @@ class RealCodefProvider(BaseCodefProvider):
         return str(((month - 1) // 3) + 1)
 
     @staticmethod
-    def _get_credit_card_sales_certificate_fields():
+    def _read_base64_file(file_path, label):
+        """로컬 인증서 파일을 읽어 Base64 문자열로 변환한다.
+
+        CODEF_PROBE_CERT_FILE / CODEF_PROBE_KEY_FILE은 인증서 파일
+        "경로"를 가리킨다. (.env에 인코딩된 문자열을 직접 붙여넣지 않는다.
+        인증서가 갱신될 때 파일 경로는 그대로 두고 파일만 교체하면 되도록
+        하기 위함이다.)
+        """
+
+        if not file_path:
+            raise CodefBusinessAccessError(
+                f"{label} 경로가 설정되지 않았습니다."
+            )
+
+        path = Path(file_path)
+
+        if not path.exists():
+            raise CodefBusinessAccessError(
+                f"{label} 파일을 찾을 수 없습니다: {path}"
+            )
+
+        try:
+            raw_bytes = path.read_bytes()
+        except OSError as exc:
+            raise CodefBusinessAccessError(
+                f"{label} 파일을 읽을 수 없습니다: {exc}"
+            ) from exc
+
+        return base64.b64encode(raw_bytes).decode("ascii")
+
+    def _get_credit_card_sales_certificate_fields(self):
         """신용카드 매출자료 조회용 공동인증서 필드를 조립한다.
 
         CODEF 명세상 이 상품은 간편인증 loginType을 사용하지 않고
         certFile / certPassword / certType을 직접 받는다.
 
-        certFile / keyFile에는 CODEF API가 요구하는 인증서 파일 문자열을
-        환경변수에 준비해 둔 값을 그대로 사용한다. 파일 경로나 바이너리를
-        이 Provider에서 임의 변환하지 않는다.
+        certFile / keyFile은 CODEF_PROBE_CERT_FILE / CODEF_PROBE_KEY_FILE
+        경로의 실제 인증서 파일을 읽어 Base64로 인코딩한 값을 사용한다.
         """
 
-        cert_file = os.environ.get(
+        cert_file_path = os.environ.get(
             "CODEF_PROBE_CERT_FILE",
+            "",
+        ).strip()
+        key_file_path = os.environ.get(
+            "CODEF_PROBE_KEY_FILE",
             "",
         ).strip()
         cert_password = os.environ.get(
             "CODEF_PROBE_CERT_PASSWORD",
             "",
         ).strip()
-        key_file = os.environ.get(
-            "CODEF_PROBE_KEY_FILE",
-            "",
-        ).strip()
         cert_type = os.environ.get(
             "CODEF_PROBE_CERT_TYPE",
             "1",
         ).strip()
-
-        if not cert_file:
-            raise CodefBusinessAccessError(
-                "CODEF_PROBE_CERT_FILE이 설정되지 않았습니다."
-            )
 
         if not cert_password:
             raise CodefBusinessAccessError(
@@ -221,10 +247,10 @@ class RealCodefProvider(BaseCodefProvider):
                 "'1'(der/key) 또는 'pfx'여야 합니다."
             )
 
-        if cert_type == "1" and not key_file:
-            raise CodefBusinessAccessError(
-                "certType='1'인 경우 CODEF_PROBE_KEY_FILE이 필요합니다."
-            )
+        cert_file = self._read_base64_file(
+            cert_file_path,
+            "certFile",
+        )
 
         try:
             encrypted_password = encrypt_with_public_key(
@@ -242,7 +268,10 @@ class RealCodefProvider(BaseCodefProvider):
         }
 
         if cert_type == "1":
-            fields["keyFile"] = key_file
+            fields["keyFile"] = self._read_base64_file(
+                key_file_path,
+                "keyFile",
+            )
 
         # CODEF 문서상 선택 입력값. 필요한 경우에만 전송한다.
         optional_env_fields = {
