@@ -5,6 +5,7 @@ from .views import (
     TransactionDetailView,
     TransactionDuplicateListView,
     TransactionDuplicateResolutionView,
+    TransactionExportView,
     TransactionListView,
     TransactionPurposeView,
     TransactionSyncRetryView,
@@ -13,6 +14,7 @@ from .views import (
 
 
 urlpatterns = [
+    path("export/", TransactionExportView.as_view(), name="transaction-export"),
     path("sync/", TransactionSyncView.as_view(), name="transaction-sync"),
     path("sync/retry/", TransactionSyncRetryView.as_view(), name="transaction-sync-retry"),
     path("", TransactionListView.as_view(), name="transaction-list"),

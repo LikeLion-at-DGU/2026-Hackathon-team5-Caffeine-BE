@@ -212,3 +212,16 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(response.status_code, 404)
         self.duplicate.refresh_from_db()
         self.assertEqual(self.duplicate.status, TransactionDuplicate.Status.PENDING)
+
+    def test_export_csv_returns_excel_compatible_csv_file(self):
+        response = self.client.get(
+            reverse("transaction-export"),
+            {"business_id": self.business.id, "year": 2026, "month": 8},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Content-Type"], "text/csv; charset=utf-8-sig")
+        self.assertIn("attachment; filename=", response.headers["Content-Disposition"])
+        content = response.content.decode("utf-8-sig")
+        self.assertIn("거래일자,거래시간,거래처명", content)
+        self.assertIn("서울우유 성동대리점", content)

@@ -251,6 +251,116 @@ class TransactionListView(APIView):
         )
 
 
+class TransactionExportView(APIView):
+    """지출 내역 분류 화면에서 거래 내역을 CSV 파일로 즉시 다운로드하는 API."""
+
+    def get(self, request, business_id=None):
+        import csv
+        import io
+        from django.http import HttpResponse
+        from tax.services.periods import month_range
+
+        query_data = request.query_params.copy()
+        if business_id is not None and "business_id" not in query_data:
+            query_data["business_id"] = business_id
+
+        # year, month가 들어온 경우 start_date, end_date 자동 계산
+        if "year" in query_data and "month" in query_data:
+            try:
+                y = int(query_data["year"])
+                m = int(query_data["month"])
+                s_date, e_date = month_range(y, m)
+                if "start_date" not in query_data:
+                    query_data["start_date"] = s_date.isoformat()
+                if "end_date" not in query_data:
+                    query_data["end_date"] = e_date.isoformat()
+            except (ValueError, TypeError):
+                pass
+
+        query = TransactionListQuerySerializer(data=query_data)
+        if not query.is_valid():
+            return error_response(
+                code="INVALID_TRANSACTION_EXPORT_QUERY",
+                message="거래 내보내기 조건이 올바르지 않습니다.",
+                errors=query.errors,
+            )
+
+        params = query.validated_data
+        queryset = Transaction.objects.filter(business=params["business"]).order_by("-transaction_date", "-transaction_time", "-id")
+
+        if params.get("start_date"):
+            queryset = queryset.filter(transaction_date__gte=params["start_date"])
+        if params.get("end_date"):
+            queryset = queryset.filter(transaction_date__lte=params["end_date"])
+        for field in ["transaction_type", "source_type", "category", "expense_purpose"]:
+            if params.get(field):
+                queryset = queryset.filter(**{field: params[field]})
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # CSV 헤더 작성 (엑셀 친화적 한글 헤더)
+        writer.writerow([
+            "거래일자",
+            "거래시간",
+            "거래처명",
+            "사업자등록번호",
+            "거래구분",
+            "수집출처",
+            "카테고리",
+            "지출구분",
+            "부가세공제",
+            "공급가액",
+            "부가세액",
+            "총금액",
+            "승인번호",
+        ])
+
+        type_labels = {
+            Transaction.TransactionType.PURCHASE: "매입(지출)",
+            Transaction.TransactionType.SALE: "매출",
+        }
+        source_labels = {
+            Transaction.SourceType.CARD_PURCHASE: "신용카드 매입",
+            Transaction.SourceType.CASH_RECEIPT_SALE: "현금영수증 매출",
+            Transaction.SourceType.TAX_INVOICE: "전자세금계산서",
+        }
+        purpose_labels = {
+            Transaction.ExpensePurpose.BUSINESS: "사업 지출",
+            Transaction.ExpensePurpose.PERSONAL: "개인 지출",
+            Transaction.ExpensePurpose.UNCLASSIFIED: "미분류",
+        }
+        deduction_labels = {
+            Transaction.SourceDeductionStatus.DEDUCTIBLE: "공제 대상",
+            Transaction.SourceDeductionStatus.NON_DEDUCTIBLE: "불공제",
+            Transaction.SourceDeductionStatus.UNKNOWN: "확인 필요",
+        }
+
+        for tx in queryset:
+            writer.writerow([
+                tx.transaction_date.strftime("%Y-%m-%d") if tx.transaction_date else "",
+                tx.transaction_time.strftime("%H:%M:%S") if tx.transaction_time else "",
+                tx.merchant_name or "",
+                tx.merchant_business_number or "",
+                type_labels.get(tx.transaction_type, str(tx.transaction_type)),
+                source_labels.get(tx.source_type, str(tx.source_type)),
+                tx.get_category_display() if hasattr(tx, "get_category_display") else str(tx.category),
+                purpose_labels.get(tx.expense_purpose, str(tx.expense_purpose)),
+                deduction_labels.get(tx.source_deduction_status, str(tx.source_deduction_status)),
+                int(tx.supply_amount) if tx.supply_amount is not None else 0,
+                int(tx.vat_amount) if tx.vat_amount is not None else 0,
+                int(tx.total_amount) if tx.total_amount is not None else 0,
+                tx.approval_no or "",
+            ])
+
+        # UTF-8 with BOM for Excel compatibility
+        csv_bytes = output.getvalue().encode("utf-8-sig")
+        response = HttpResponse(csv_bytes, content_type="text/csv; charset=utf-8-sig")
+        date_str = params.get("start_date", timezone.localdate()).strftime("%Y-%m") if params.get("start_date") else "all"
+        response["Content-Disposition"] = f'attachment; filename="caffeine_transactions_{date_str}.csv"'
+        return response
+
+
 class TransactionDetailView(APIView):
     def get(self, request, transaction_id):
         business, error = _business_scope(request)
