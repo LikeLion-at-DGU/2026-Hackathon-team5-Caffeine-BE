@@ -9,9 +9,10 @@ from analytics.serializers import (
     AnalyticsExportQuerySerializer,
     AnalyticsPeriodQuerySerializer,
     CostRatioQuerySerializer,
+    ProfitTrendQuerySerializer,
     TrendQuerySerializer,
 )
-from analytics.services.analytics_service import get_category_trend, get_cost_ratio
+from analytics.services.analytics_service import ( get_category_trend, get_cost_ratio, get_profit_trend, )
 from analytics.services import monthly_close_service
 from analytics.services.monthly_summary_service import get_monthly_tax_summary
 from businesses.models import Business
@@ -114,6 +115,31 @@ class CategoryTrendView(APIView):
             code="CATEGORY_TREND_SUCCESS",
             message="카테고리 증감 추이를 조회했습니다.",
             data=get_category_trend(business_id=business_id, **query.validated_data),
+        )
+        
+
+class ProfitTrendView(APIView):
+    def get(self, request, business_id):
+        if error := _business_error(business_id):
+            return error
+
+        query = ProfitTrendQuerySerializer(data=request.query_params)
+
+        if not query.is_valid():
+            return _error_response(
+                "INVALID_PROFIT_TREND_QUERY",
+                "매출 및 영업이익 추이 조회 조건이 올바르지 않습니다.",
+                status.HTTP_400_BAD_REQUEST,
+                query.errors,
+            )
+
+        return success_response(
+            code="PROFIT_TREND_SUCCESS",
+            message="최근 매출 및 영업이익 추이를 조회했습니다.",
+            data=get_profit_trend(
+                business_id=business_id,
+                **query.validated_data,
+            ),
         )
 
 
