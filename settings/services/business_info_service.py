@@ -15,6 +15,8 @@ def get_business_info(business_id: int) -> dict:
     return {
         "business_name": business.business_name,
         "representative_name": business.representative_name,
+        "birth_date": business.birth_date,
+        "phone_number": business.phone_number,
         "business_number": business.business_number,
         "tax_type": business.tax_type,
         "industry_code": business.industry_code,

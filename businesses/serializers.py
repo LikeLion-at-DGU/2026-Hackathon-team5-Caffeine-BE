@@ -19,6 +19,8 @@ class BusinessSerializer(serializers.ModelSerializer):
             "business_id",
             "business_name",
             "representative_name",
+            "birth_date",
+            "phone_number",
             "business_number",
             "industry_code",
             "business_type",

@@ -31,13 +31,18 @@ class PaymentMethodUpdateSerializer(serializers.Serializer):
 class BusinessInfoSerializer(serializers.Serializer):
     business_name = serializers.CharField()
     representative_name = serializers.CharField(allow_blank=True)
+    birth_date = serializers.CharField(required=False, allow_blank=True)
+    phone_number = serializers.CharField(required=False, allow_blank=True)
     business_number = serializers.CharField(allow_null=True, allow_blank=True)
     tax_type = serializers.CharField(required=False)
     industry_code = serializers.CharField(allow_blank=True)
-    
+
+
 class BusinessInfoUpdateSerializer(serializers.Serializer):
     business_name = serializers.CharField(required=False)
     representative_name = serializers.CharField(required=False, allow_blank=True)
+    birth_date = serializers.CharField(required=False, allow_blank=True)
+    phone_number = serializers.CharField(required=False, allow_blank=True)
     business_number = serializers.CharField(required=False, allow_blank=True)
     industry_code = serializers.CharField(required=False, allow_blank=True)
     # tax_type은 서버 관리 필드이므로 Settings PATCH에서는 수정 X
