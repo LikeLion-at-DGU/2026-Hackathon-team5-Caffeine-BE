@@ -214,8 +214,11 @@ class TransactionSyncRetryView(APIView):
 
 
 class TransactionListView(APIView):
-    def get(self, request):
-        query = TransactionListQuerySerializer(data=request.query_params)
+    def get(self, request, business_id=None):
+        query_data = request.query_params.copy()
+        if business_id is not None and "business_id" not in query_data:
+            query_data["business_id"] = business_id
+        query = TransactionListQuerySerializer(data=query_data)
         if not query.is_valid():
             return error_response(
                 code="INVALID_TRANSACTION_QUERY",
