@@ -49,6 +49,7 @@ class BenchmarkService:
                 "raw_material_ratio": calc.raw_material_ratio,
                 "benchmark_raw_material_ratio": calc.benchmark_raw_material_ratio,
                 "raw_material_diff_pct": calc.raw_material_diff_pct,
+                "vat_deduction_estimate": calc.vat_deduction_estimate,
             },
             "ai_prescriptions": history.prescriptions,
             "overall_health": {
