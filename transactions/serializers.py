@@ -40,6 +40,16 @@ class TransactionSyncRequestSerializer(serializers.Serializer):
         return value
 
 
+class TransactionSyncRetryRequestSerializer(serializers.Serializer):
+    # 카카오 2-way 인증 완료 후 재시도할 사업장만 받는다. 어떤 소스를
+    # 어느 기간으로 재요청할지는 CodefConnection의 pending_* 값으로
+    # 서버가 알아서 판단하므로 별도 파라미터가 필요 없다.
+    business_id = serializers.PrimaryKeyRelatedField(
+        source="business",
+        queryset=Business.objects.all(),
+    )
+
+
 class TransactionListQuerySerializer(serializers.Serializer):
     business_id = serializers.PrimaryKeyRelatedField(
         source="business",

@@ -1,11 +1,18 @@
+import base64
 import os
+from pathlib import Path
 
 import requests
 
 from businesses.models import CodefConnection
 
 from .base import BaseCodefProvider, CodefBusinessAccessError
-from .client import CodefClient, CodefClientError
+from .client import (
+    CodefClient,
+    CodefClientError,
+    build_two_way_payload,
+    encrypt_with_public_key,
+)
 
 
 class RealCodefProvider(BaseCodefProvider):
@@ -55,6 +62,16 @@ class RealCodefProvider(BaseCodefProvider):
     BUSINESS_CARD_PURCHASE_PATH = (
         "/v1/kr/public/nt/cash-receipt/"
         "deduction-of-business-credit-card-purchase-amount"
+    )
+
+    # --------------------------------------------------
+    # 신용카드 매출자료
+    # --------------------------------------------------
+
+    CREDIT_CARD_SALES_ORGANIZATION = "0006"
+    CREDIT_CARD_SALES_PATH = (
+        "/v1/kr/public/nt/tax-payment/"
+        "credit-card-sales-data-list"
     )
 
     # --------------------------------------------------
@@ -121,6 +138,183 @@ class RealCodefProvider(BaseCodefProvider):
             cls._format_yyyymm(start_date)
             == cls._format_yyyymm(end_date)
         )
+
+    @classmethod
+    def _format_year(cls, value):
+        """date 또는 문자열에서 YYYY를 반환한다."""
+
+        if hasattr(value, "strftime"):
+            return value.strftime("%Y")
+
+        text = cls._digits(value)
+
+        if len(text) not in {6, 8}:
+            raise CodefBusinessAccessError(
+                f"날짜는 YYYYMM 또는 YYYYMMDD 형식이어야 합니다: {value!r}"
+            )
+
+        return text[:4]
+
+    @classmethod
+    def _format_quarter(cls, value):
+        """date 또는 문자열을 분기 번호(1~4)로 변환한다."""
+
+        if hasattr(value, "strftime"):
+            month = int(value.strftime("%m"))
+        else:
+            text = cls._digits(value)
+
+            if len(text) in {6, 8}:
+                month = int(text[4:6])
+            else:
+                raise CodefBusinessAccessError(
+                    "신용카드 매출자료 조회 날짜는 "
+                    f"YYYYMM 또는 YYYYMMDD 형식이어야 합니다: {value!r}"
+                )
+
+        if not 1 <= month <= 12:
+            raise CodefBusinessAccessError(
+                f"올바르지 않은 월입니다: {value!r}"
+            )
+
+        return str(((month - 1) // 3) + 1)
+
+    @staticmethod
+    def _read_base64_file(file_path, label):
+        """로컬 인증서 파일을 읽어 Base64 문자열로 변환한다.
+
+        CODEF_PROBE_CERT_FILE / CODEF_PROBE_KEY_FILE은 인증서 파일
+        "경로"를 가리킨다. (.env에 인코딩된 문자열을 직접 붙여넣지 않는다.
+        인증서가 갱신될 때 파일 경로는 그대로 두고 파일만 교체하면 되도록
+        하기 위함이다.)
+        """
+
+        if not file_path:
+            raise CodefBusinessAccessError(
+                f"{label} 경로가 설정되지 않았습니다."
+            )
+
+        path = Path(file_path)
+
+        if not path.exists():
+            raise CodefBusinessAccessError(
+                f"{label} 파일을 찾을 수 없습니다: {path}"
+            )
+
+        try:
+            raw_bytes = path.read_bytes()
+        except OSError as exc:
+            raise CodefBusinessAccessError(
+                f"{label} 파일을 읽을 수 없습니다: {exc}"
+            ) from exc
+
+        return base64.b64encode(raw_bytes).decode("ascii")
+
+    def _get_credit_card_sales_certificate_fields(self):
+        """신용카드 매출자료 조회용 공동인증서 필드를 조립한다.
+
+        CODEF 명세상 이 상품은 간편인증 loginType을 사용하지 않고
+        certFile / certPassword / certType을 직접 받는다.
+
+        certFile / keyFile은 CODEF_PROBE_CERT_FILE / CODEF_PROBE_KEY_FILE
+        경로의 실제 인증서 파일을 읽어 Base64로 인코딩한 값을 사용한다.
+        """
+
+        cert_file_path = os.environ.get(
+            "CODEF_PROBE_CERT_FILE",
+            "",
+        ).strip()
+        key_file_path = os.environ.get(
+            "CODEF_PROBE_KEY_FILE",
+            "",
+        ).strip()
+        cert_password = os.environ.get(
+            "CODEF_PROBE_CERT_PASSWORD",
+            "",
+        ).strip()
+        cert_type = os.environ.get(
+            "CODEF_PROBE_CERT_TYPE",
+            "1",
+        ).strip()
+
+        if not cert_password:
+            raise CodefBusinessAccessError(
+                "CODEF_PROBE_CERT_PASSWORD가 설정되지 않았습니다."
+            )
+
+        if cert_type not in {"1", "pfx"}:
+            raise CodefBusinessAccessError(
+                "CODEF_PROBE_CERT_TYPE은 신용카드 매출자료 명세 기준 "
+                "'1'(der/key) 또는 'pfx'여야 합니다."
+            )
+
+        cert_file = self._read_base64_file(
+            cert_file_path,
+            "certFile",
+        )
+
+        try:
+            encrypted_password = encrypt_with_public_key(
+                cert_password
+            )
+        except CodefClientError as exc:
+            raise CodefBusinessAccessError(
+                f"공동인증서 비밀번호 RSA 암호화에 실패했습니다: {exc}"
+            ) from exc
+
+        fields = {
+            "certFile": cert_file,
+            "certPassword": encrypted_password,
+            "certType": cert_type,
+        }
+
+        if cert_type == "1":
+            fields["keyFile"] = self._read_base64_file(
+                key_file_path,
+                "keyFile",
+            )
+
+        # CODEF 문서상 선택 입력값. 필요한 경우에만 전송한다.
+        optional_env_fields = {
+            "deptUserId": "CODEF_PROBE_DEPT_USER_ID",
+            "deptUserPass": "CODEF_PROBE_DEPT_USER_PASS",
+            "loginIdentity": "CODEF_PROBE_CARD_SALES_LOGIN_IDENTITY",
+            "manageNo": "CODEF_PROBE_MANAGE_NO",
+            "managePass": "CODEF_PROBE_MANAGE_PASS",
+        }
+
+        for field_name, env_name in optional_env_fields.items():
+            value = os.environ.get(env_name, "").strip()
+            if value:
+                fields[field_name] = value
+
+        return fields
+
+    def _post_maybe_two_way(
+        self,
+        path,
+        payload,
+        *,
+        two_way_info=None,
+        simple_auth=None,
+    ):
+        """CODEF 거래 조회의 1차 요청 또는 2-way 재요청을 수행한다.
+
+        two_way_info와 simple_auth가 전달되면 기존 payload에
+        simpleAuth / is2Way / twoWayInfo를 추가해 동일 endpoint로 재요청한다.
+
+        CODEF 2-way는 별도의 인증 API를 호출하는 방식이 아니라,
+        인증이 발생한 거래 상품을 동일 endpoint로 다시 요청하는 구조다.
+        """
+
+        if two_way_info is not None and simple_auth is not None:
+            payload = build_two_way_payload(
+                payload,
+                two_way_info,
+                simple_auth=simple_auth,
+            )
+
+        return self.client.post(path, payload)
 
     def _get_hometax_simple_auth_fields(
         self,
@@ -405,7 +599,7 @@ class RealCodefProvider(BaseCodefProvider):
         }
 
     # ==================================================
-    # 인증
+    # 기존 CODEF 연결 인증
     # ==================================================
 
     def request_auth(
@@ -413,8 +607,11 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         connection_type,
     ):
-        # 현재 거래 실조회는 각 상품 API 자체에서
-        # 카카오 간편인증을 요청하는 방식으로 검증했다.
+        """기존 codef-auth API용 연결 인증 인터페이스.
+
+        Transaction Sync 과정에서 발생하는 거래별 2-way 추가인증과는
+        별도의 흐름이다.
+        """
         raise NotImplementedError(
             "Real CODEF 공통 인증 요청은 "
             "아직 별도 구현되지 않았습니다."
@@ -425,6 +622,7 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         connection,
     ):
+        """기존 codef-auth API용 연결 인증 재시도 인터페이스."""
         raise NotImplementedError(
             "Real CODEF 공통 인증 재시도는 "
             "아직 별도 구현되지 않았습니다."
@@ -439,15 +637,18 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         start_date,
         end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
     ):
         """사업용 신용카드 매입 원본 CODEF 응답을 반환한다.
 
-        CODEF 해당 상품은 월별 조회 시:
-        searchType="1"
-        startDate=YYYYMM
+        최초 호출에서는 카카오 간편인증을 포함한 1차 요청을 수행한다.
+        two_way_info와 simple_auth가 전달되면 동일 상품의 2-way 재요청을
+        수행한다.
 
-        현재 TransactionSyncService 인터페이스는 start/end date를 받으므로
-        동일 월 범위만 Real 조회하도록 제한한다.
+        이 상품은 월 단위 조회이므로 start_date와 end_date는
+        같은 월이어야 한다.
         """
 
         if not self._same_month(
@@ -495,9 +696,11 @@ class RealCodefProvider(BaseCodefProvider):
             "detailYN": "1",
         }
 
-        return self.client.post(
+        return self._post_maybe_two_way(
             self.BUSINESS_CARD_PURCHASE_PATH,
             payload,
+            two_way_info=two_way_info,
+            simple_auth=simple_auth,
         )
 
     # ==================================================
@@ -509,8 +712,15 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         start_date,
         end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
     ):
-        """현금영수증 매출 원본 CODEF 응답을 반환한다."""
+        """현금영수증 매출 원본 CODEF 응답을 반환한다.
+
+        two_way_info와 simple_auth가 전달되면 동일 상품 endpoint로
+        2-way 추가인증 재요청을 수행한다.
+        """
 
         auth_fields = (
             self._get_hometax_simple_auth_fields(
@@ -546,9 +756,11 @@ class RealCodefProvider(BaseCodefProvider):
             "orderBy": "0",
         }
 
-        return self.client.post(
+        return self._post_maybe_two_way(
             self.CASH_RECEIPT_SALES_PATH,
             payload,
+            two_way_info=two_way_info,
+            simple_auth=simple_auth,
         )
 
     # ==================================================
@@ -560,8 +772,16 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         start_date,
         end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
     ):
-        """전자세금계산서 매입 원본 CODEF 응답을 반환한다."""
+        """전자세금계산서 매입 원본 CODEF 응답을 반환한다.
+
+        transeType="02"로 매입 자료를 조회한다.
+        two_way_info와 simple_auth가 전달되면 동일 조회 조건으로
+        2-way 추가인증 재요청을 수행한다.
+        """
 
         auth_fields = (
             self._get_hometax_simple_auth_fields(
@@ -615,9 +835,11 @@ class RealCodefProvider(BaseCodefProvider):
             "pageCount": "40",
         }
 
-        return self.client.post(
+        return self._post_maybe_two_way(
             self.TAX_INVOICE_PATH,
             payload,
+            two_way_info=two_way_info,
+            simple_auth=simple_auth,
         )
 
     # ==================================================
@@ -629,8 +851,16 @@ class RealCodefProvider(BaseCodefProvider):
         business,
         start_date,
         end_date,
+        *,
+        two_way_info=None,
+        simple_auth=None,
     ):
-        """전자세금계산서 매출 원본 CODEF 응답을 반환한다."""
+        """전자세금계산서 매출 원본 CODEF 응답을 반환한다.
+
+        transeType="01"로 매출 자료를 조회한다.
+        two_way_info와 simple_auth가 전달되면 동일 조회 조건으로
+        2-way 추가인증 재요청을 수행한다.
+        """
 
         auth_fields = (
             self._get_hometax_simple_auth_fields(
@@ -684,9 +914,11 @@ class RealCodefProvider(BaseCodefProvider):
             "pageCount": "40",
         }
 
-        return self.client.post(
+        return self._post_maybe_two_way(
             self.TAX_INVOICE_PATH,
             payload,
+            two_way_info=two_way_info,
+            simple_auth=simple_auth,
         )
 
     # ==================================================
@@ -699,14 +931,55 @@ class RealCodefProvider(BaseCodefProvider):
         start_date,
         end_date,
     ):
-        """신용카드 월별 매출자료.
+        """공동인증서 기반 신용카드 월별 매출자료를 조회한다.
 
-        해당 CODEF 상품은 카카오 간편인증이 아니라
-        공동인증서 certFile / certPassword 등이 필요하므로
-        현재 Real 연동에서는 보류한다.
+        CODEF 명세 기준:
+        - organization="0006"
+        - certFile / certPassword / certType 사용
+        - year=YYYY
+        - startDate / endDate는 조회 분기("1"~"4")
+
+        카카오 간편인증 상품이 아니므로 Transaction Sync의
+        2-way 추가인증 흐름을 사용하지 않는다.
+
+        API 입력에 사업자번호(identity)가 없어 business는
+        Provider 인터페이스 호환을 위해서만 전달받는다.
         """
 
-        raise NotImplementedError(
-            "실제 신용카드 매출자료 조회는 "
-            "공동인증서가 필요하여 아직 구현되지 않았습니다."
+        start_year = self._format_year(start_date)
+        end_year = self._format_year(end_date)
+
+        if start_year != end_year:
+            raise CodefBusinessAccessError(
+                "신용카드 매출자료 Real 조회는 CODEF 명세상 year를 하나만 "
+                "전송하므로 연도를 넘겨 조회할 수 없습니다. "
+                "start_date와 end_date를 같은 연도로 지정하세요."
+            )
+
+        start_quarter = self._format_quarter(start_date)
+        end_quarter = self._format_quarter(end_date)
+
+        if int(start_quarter) > int(end_quarter):
+            raise CodefBusinessAccessError(
+                "신용카드 매출자료 조회 시작 분기가 종료 분기보다 늦습니다."
+            )
+
+        certificate_fields = (
+            self._get_credit_card_sales_certificate_fields()
+        )
+
+        payload = {
+            "organization":
+                self.CREDIT_CARD_SALES_ORGANIZATION,
+
+            **certificate_fields,
+
+            "year": start_year,
+            "startDate": start_quarter,
+            "endDate": end_quarter,
+        }
+
+        return self.client.post(
+            self.CREDIT_CARD_SALES_PATH,
+            payload,
         )
