@@ -36,21 +36,75 @@ def _business_error(business_id):
     )
 
 
+def _resolve_business_id(request, business_id=None):
+    if business_id is not None:
+        return business_id, None
+    bid = request.query_params.get("business_id")
+    if not bid:
+        return None, _error_response(
+            "INVALID_BUSINESS_ID",
+            "business_id는 필수 파라미터입니다.",
+            status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        bid_int = int(bid)
+        return bid_int, None
+    except (ValueError, TypeError):
+        return None, _error_response(
+            "INVALID_BUSINESS_ID",
+            "business_id 형식이 올바르지 않습니다.",
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+
 class MonthlySummaryView(APIView):
-    def get(self, request, business_id):
-        if error := _business_error(business_id):
+    def get(self, request, business_id=None):
+        resolved_id, error = _resolve_business_id(request, business_id)
+        if error:
             return error
+        if b_error := _business_error(resolved_id):
+            return b_error
+
         query = AnalyticsPeriodQuerySerializer(data=request.query_params)
         if not query.is_valid():
             return _error_response(
-                "INVALID_PERIOD", "조회 기간이 올바르지 않습니다.",
-                status.HTTP_400_BAD_REQUEST, query.errors,
+                "INVALID_PERIOD",
+                "조회 기간이 올바르지 않습니다.",
+                status.HTTP_400_BAD_REQUEST,
+                query.errors,
             )
 
-        data = get_monthly_tax_summary(business_id, **query.validated_data)
+        data = get_monthly_tax_summary(resolved_id, **query.validated_data)
         return success_response(
             code="MONTHLY_SUMMARY_SUCCESS",
             message="월별 세무 현황 결산을 조회했습니다.",
+            data=data,
+        )
+
+
+class DeductionBreakdownView(APIView):
+    def get(self, request, business_id=None):
+        resolved_id, error = _resolve_business_id(request, business_id)
+        if error:
+            return error
+        if b_error := _business_error(resolved_id):
+            return b_error
+
+        query = AnalyticsPeriodQuerySerializer(data=request.query_params)
+        if not query.is_valid():
+            return _error_response(
+                "INVALID_PERIOD",
+                "조회 기간이 올바르지 않습니다.",
+                status.HTTP_400_BAD_REQUEST,
+                query.errors,
+            )
+
+        from analytics.services.monthly_summary_service import get_deduction_breakdown
+
+        data = get_deduction_breakdown(resolved_id, **query.validated_data)
+        return success_response(
+            code="DEDUCTION_BREAKDOWN_SUCCESS",
+            message="부가세 공제 구조 분석 데이터를 조회했습니다.",
             data=data,
         )
 
