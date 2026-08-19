@@ -6,18 +6,23 @@ from settings.models import Subscription
 
 class SubscriptionSerializer(serializers.ModelSerializer):
     plan_display_name = serializers.SerializerMethodField()
+    status_display = serializers.SerializerMethodField()
     days_until_billing = serializers.SerializerMethodField()
 
     class Meta:
         model = Subscription
         fields = [
-            "plan_name", "plan_display_name", "price", "status",
+            "plan_name", "plan_display_name", "price", "status", "status_display",
             "next_billing_date", "days_until_billing",
             "card_company", "card_last4",
+            "cancelled_at", "access_until", "last_payment_error",
         ]
 
     def get_plan_display_name(self, obj):
         return obj.get_plan_name_display()
+
+    def get_status_display(self, obj):
+        return obj.get_status_display()
 
     def get_days_until_billing(self, obj):
         delta = obj.next_billing_date - timezone.now().date()
