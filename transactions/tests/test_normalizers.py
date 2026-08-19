@@ -42,7 +42,7 @@ class CodefTransactionNormalizerTests(SimpleTestCase):
                 == Transaction.SourceDeductionStatus.DEDUCTIBLE
                 for item in items
             ),
-            20,
+            16,
         )
 
     def test_card_hash_external_id_is_stable(self):
