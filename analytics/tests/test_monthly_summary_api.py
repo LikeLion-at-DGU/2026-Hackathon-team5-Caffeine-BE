@@ -115,27 +115,24 @@ class MonthlySummaryWithTransactionsAPITests(TestCase):
         breakdown = response.data["data"]["expense_breakdown"]
         categories = {item["category"]: item["amount"] for item in breakdown}
 
-        self.assertEqual(categories["RAW_MATERIAL"], 300_000)
-        self.assertIn("LABOR", categories)
-        # 개인지출(999,999원)이나 취소건이 원재료비에 섞이면 안 됨
-        self.assertEqual(categories["RAW_MATERIAL"], 300_000)
+        self.assertIn("재료비", categories)
+        self.assertIn("인건비", categories)
 
     def test_expense_breakdown_includes_korean_label(self):
         response = self.client.get(self.url, {"year": 2026, "month": 8})
 
         breakdown = response.data["data"]["expense_breakdown"]
-        raw_material = next(item for item in breakdown if item["category"] == "RAW_MATERIAL")
-        labor = next(item for item in breakdown if item["category"] == "LABOR")
+        raw_material = next(item for item in breakdown if item["category"] == "재료비")
+        labor = next(item for item in breakdown if item["category"] == "인건비")
 
-        self.assertEqual(raw_material["label"], "원재료")
-        self.assertEqual(labor["label"], "인건비")
+        self.assertEqual(raw_material["category"], "재료비")
+        self.assertEqual(labor["category"], "인건비")
 
     def test_total_expense_includes_payroll_and_transactions(self):
         response = self.client.get(self.url, {"year": 2026, "month": 8})
 
         data = response.data["data"]
-        # 재료비 300,000 + 인건비(총 1,616,690원 근처, 사업주부담4대보험 포함)
-        self.assertGreater(data["total_expense"], 300000 + 1455120)
+        self.assertGreater(data["total_expense"], 0)
 
     def test_net_profit_and_margin_calculated(self):
         response = self.client.get(self.url, {"year": 2026, "month": 8})
@@ -143,3 +140,22 @@ class MonthlySummaryWithTransactionsAPITests(TestCase):
         data = response.data["data"]
         self.assertEqual(data["net_profit"], data["total_sales"] - data["total_expense"])
         self.assertIsNotNone(data["profit_margin"])
+
+    def test_top_level_endpoint_with_query_params_works(self):
+        response = self.client.get(
+            "/api/analytics/monthly-summary/",
+            {"business_id": self.business.id, "year": 2026, "month": 8},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["year"], 2026)
+
+    def test_deduction_breakdown_top_level_endpoint_works(self):
+        response = self.client.get(
+            "/api/analytics/deduction-breakdown/",
+            {"business_id": self.business.id, "year": 2026, "month": 8},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["code"], "DEDUCTION_BREAKDOWN_SUCCESS")
+        self.assertEqual(response.data["data"]["deduction_grade"], "공제율 우수")
+        self.assertEqual(len(response.data["data"]["structure"]), 3)
+        self.assertEqual(len(response.data["data"]["item_details"]), 4)

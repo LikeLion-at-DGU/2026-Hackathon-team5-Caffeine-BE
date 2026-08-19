@@ -26,7 +26,7 @@ def get_cost_ratio(*, business_id: int, year: int, month: int) -> dict:
         "business_id": business_id,
         "year_month": f"{year:04d}-{month:02d}",
         "total_expense": summary["total_expense"],
-        "items": summary["expense_breakdown"],
+        "items": summary.get("raw_expense_breakdown", summary["expense_breakdown"]),
     }
 
 
