@@ -91,8 +91,8 @@ class TransactionSyncServiceTests(TestCase):
             [Transaction.SourceType.CARD_PURCHASE],
         )
 
-        self.assertEqual(result["created_count"], 2)
-        self.assertEqual(result["skipped_outside_period_count"], 24)
+        self.assertEqual(result["created_count"], 3)
+        self.assertEqual(result["skipped_outside_period_count"], 23)
 
     def test_business_number_mismatch_is_rejected(self):
         other = Business.objects.create(

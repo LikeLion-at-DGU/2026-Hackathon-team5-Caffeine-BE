@@ -75,8 +75,8 @@ class Command(BaseCommand):
             ],
         )
 
-        # 개인 지출 분류 및 공제 확정 처리
-        personal_keywords = ("넷플릭스", "올리브영", "개인", "데일리리빙")
+        # 개인 지출 분류 및 공제 확정 처리 (실수로 긁은 편의점/넷플릭스/올리브영/스타벅스 등)
+        personal_keywords = ("넷플릭스", "올리브영", "개인", "GS25", "스타벅스", "데일리리빙")
         purchases = Transaction.objects.filter(
             business=business,
             transaction_type=Transaction.TransactionType.PURCHASE,
