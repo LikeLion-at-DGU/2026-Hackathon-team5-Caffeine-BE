@@ -203,11 +203,12 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
 }
 
+CORS_ALLOW_ALL_ORIGINS = True  # 해커톤 프론트엔드(Flutter/Web/Local) 전면 허용
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://localhost:8080",
     ).split(",")
     if origin.strip()
 ]
