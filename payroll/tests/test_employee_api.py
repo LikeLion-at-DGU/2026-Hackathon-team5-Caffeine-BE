@@ -84,6 +84,14 @@ class EmployeeListAPITests(TestCase):
             self.assertNotIn("rrn_front", item)
             self.assertNotIn("rrn_front_encrypted", item)
 
+    def test_list_shows_actual_status_per_employee(self):
+        Employee.objects.filter(name="황사라").update(status="INACTIVE")
+        response = self.client.get(f"/api/businesses/{self.business.id}/payroll/employees/")
+
+        statuses = {item["name"]: item["status"] for item in response.data["data"]}
+        self.assertEqual(statuses["장예은"], "ACTIVE")
+        self.assertEqual(statuses["황사라"], "INACTIVE")
+
 
 class EmployeeDetailAPITests(TestCase):
     def setUp(self):
@@ -107,6 +115,22 @@ class EmployeeDetailAPITests(TestCase):
         )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data["code"], "EMPLOYEE_NOT_FOUND")
+
+    def test_update_employee_status_to_inactive_success(self):
+        """프론트엔드 퇴사 처리(삭제 X 버튼)는 soft delete로 status만 INACTIVE로 바꾼다."""
+        response = self.client.patch(self.url, {"status": "INACTIVE"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, "INACTIVE")
+        # hard delete가 아니므로 row는 그대로 남아있어야 함
+        self.assertTrue(Employee.objects.filter(id=self.employee.id).exists())
+
+    def test_update_employee_status_invalid_value_returns_400(self):
+        response = self.client.patch(self.url, {"status": "RETIRED"}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["code"], "INVALID_EMPLOYEE_DATA")
 
     def test_delete_employee_success(self):
         response = self.client.delete(self.url)

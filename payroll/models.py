@@ -10,6 +10,11 @@ class Employee(models.Model):
         ("FREELANCER", "3.3% 프리랜서"),
     ]
 
+    STATUS_CHOICES = [
+        ("ACTIVE", "재직"),
+        ("INACTIVE", "퇴사"),
+    ]
+
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="employees")
     name = models.CharField(max_length=50)
     employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_TYPE_CHOICES)
@@ -19,6 +24,7 @@ class Employee(models.Model):
     )
     work_started_at = models.DateField(null=True, blank=True)
     is_long_term_contract = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ACTIVE")
     rrn_front_encrypted = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
