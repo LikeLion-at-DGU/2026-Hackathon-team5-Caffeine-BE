@@ -22,7 +22,34 @@ class TrendQuerySerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if ("end_year" in attrs) != ("end_month" in attrs):
-            raise serializers.ValidationError("end_year와 end_month는 함께 입력해야 합니다.")
+            raise serializers.ValidationError(
+                "end_year와 end_month는 함께 입력해야 합니다."
+            )
+
+        return attrs
+    
+class ProfitTrendQuerySerializer(serializers.Serializer):
+    end_year = serializers.IntegerField(
+        min_value=2000,
+        max_value=2100,
+        required=False,
+    )
+    end_month = serializers.IntegerField(
+        min_value=1,
+        max_value=12,
+        required=False,
+    )
+    months = serializers.IntegerField(
+        min_value=2,
+        max_value=24,
+        default=6,
+    )
+
+    def validate(self, attrs):
+        if ("end_year" in attrs) != ("end_month" in attrs):
+            raise serializers.ValidationError(
+                "end_year와 end_month는 함께 입력해야 합니다."
+            )
         return attrs
 
 

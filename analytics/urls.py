@@ -7,6 +7,7 @@ from analytics.views import (
     CostRatioView,
     MonthlyCloseView,
     MonthlySummaryView,
+    ProfitTrendView,
 )
 
 urlpatterns = [
@@ -16,4 +17,5 @@ urlpatterns = [
     path("monthly-summary/", MonthlySummaryView.as_view(), name="monthly-summary"),
     path("monthly-summary/close/", MonthlyCloseView.as_view(), name="monthly-summary-close"),
     path("export/", AnalyticsExportView.as_view(), name="analytics-export"),
+    path("profit-trend/", ProfitTrendView.as_view(), name="profit-trend"),
 ]

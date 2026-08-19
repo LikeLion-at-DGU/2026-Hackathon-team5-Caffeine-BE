@@ -88,3 +88,40 @@ def get_category_trend(
         "items": values,
         "latest_change_rate": values[-1]["change_rate"],
     }
+
+def get_profit_trend(
+    *,
+    business_id: int,
+    end_year: int | None = None,
+    end_month: int | None = None,
+    months: int = 6,
+) -> dict:
+    today = date.today()
+    end_year = end_year or today.year
+    end_month = end_month or today.month
+
+    values = []
+
+    for offset in range(-(months - 1), 1):
+        year, month = _shift_month(end_year, end_month, offset)
+
+        summary = get_monthly_tax_summary(
+            business_id=business_id,
+            year=year,
+            month=month,
+        )
+
+        values.append(
+            {
+                "year": year,
+                "month": month,
+                "year_month": f"{year:04d}-{month:02d}",
+                "total_sales": summary["total_sales"],
+                "net_profit": summary["net_profit"],
+            }
+        )
+
+    return {
+        "business_id": business_id,
+        "months": values,
+    }
