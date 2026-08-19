@@ -58,6 +58,9 @@ class ChatMessageView(APIView):
             )
         params = query.validated_data
         messages = ChatMessage.objects.filter(business=params["business"])
+        search_query = params.get("keyword") or params.get("q")
+        if search_query:
+            messages = messages.filter(content__icontains=search_query)
         total_count = messages.count()
         offset = (params["page"] - 1) * params["page_size"]
         items = messages[offset : offset + params["page_size"]]

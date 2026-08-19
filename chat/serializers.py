@@ -20,6 +20,8 @@ class ChatMessageListQuerySerializer(serializers.Serializer):
         source="business",
         queryset=Business.objects.all(),
     )
+    keyword = serializers.CharField(required=False, allow_blank=True, default="")
+    q = serializers.CharField(required=False, allow_blank=True, default="")
     page = serializers.IntegerField(min_value=1, default=1)
     page_size = serializers.IntegerField(min_value=1, max_value=100, default=50)
 

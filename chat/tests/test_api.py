@@ -98,3 +98,33 @@ class ChatApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["code"], "INVALID_CHAT_MESSAGE")
+
+    def test_get_filters_by_keyword_and_q(self):
+        ChatMessage.objects.create(
+            business=self.business,
+            role=ChatMessage.Role.USER,
+            content="부가세 절세 방법 알려줘",
+        )
+        ChatMessage.objects.create(
+            business=self.business,
+            role=ChatMessage.Role.USER,
+            content="원천세 신고 기한이 언제야?",
+        )
+
+        # 1. keyword로 검색
+        res1 = self.client.get(
+            reverse("chat-message-list-create"),
+            {"business_id": self.business.id, "keyword": "부가세"},
+        )
+        self.assertEqual(res1.status_code, 200)
+        self.assertEqual(res1.data["data"]["pagination"]["total_count"], 1)
+        self.assertIn("부가세", res1.data["data"]["items"][0]["content"])
+
+        # 2. q로 검색
+        res2 = self.client.get(
+            reverse("chat-message-list-create"),
+            {"business_id": self.business.id, "q": "원천세"},
+        )
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(res2.data["data"]["pagination"]["total_count"], 1)
+        self.assertIn("원천세", res2.data["data"]["items"][0]["content"])
