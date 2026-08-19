@@ -10,7 +10,9 @@ class Subscription(models.Model):
 
     STATUS_CHOICES = [
         ("ACTIVE", "구독 이용 중"),
+        ("PAST_DUE", "결제 실패"),
         ("CANCELLED", "구독 취소됨"),
+        ("EXPIRED", "이용 종료"),
     ]
 
     business = models.OneToOneField(Business, on_delete=models.CASCADE, related_name="subscription")
@@ -25,6 +27,9 @@ class Subscription(models.Model):
     billing_key_encrypted = models.CharField(max_length=255, blank=True)
     card_company = models.CharField(max_length=50, blank=True)
     card_last4 = models.CharField(max_length=4, blank=True)
+
+    # 정기 결제(자동 갱신) 실패 시 사유 — 성공하면 빈 문자열로 초기화됨
+    last_payment_error = models.CharField(max_length=255, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
