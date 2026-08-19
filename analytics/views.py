@@ -147,7 +147,7 @@ class AnalyticsExportView(APIView):
             )
         params = query.validated_data
         year_month = f'{params["year"]:04d}-{params["month"]:02d}'
-        file_type = params["file_type"]
+        file_type = request.query_params.get("file_type") or request.query_params.get("format") or params.get("file_type", "csv")
         from reports.exceptions import ReportServiceError
         from reports.services import report_service
 
