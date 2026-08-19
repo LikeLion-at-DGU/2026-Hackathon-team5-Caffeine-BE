@@ -22,23 +22,17 @@ class EmployeeCreateSerializer(serializers.ModelSerializer):
 class EmployeeUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
-        fields = ["name", "employment_type", "hourly_wage", "monthly_contracted_hours", "work_started_at"]
+        fields = ["name", "employment_type", "hourly_wage", "monthly_contracted_hours", "work_started_at", "status"]
         extra_kwargs = {field: {"required": False} for field in fields}
 
 
 class EmployeeListItemSerializer(serializers.ModelSerializer):
     employee_id = serializers.IntegerField(source="id")
-    # TODO: 재직/퇴사 상태 관리가 필요해지면 모델에 status 필드 추가 필요.
-    # 현재는 삭제(DELETE)로만 관리하므로 목록에는 항상 ACTIVE로 응답.
-    status = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
         fields = ["employee_id", "name", "employment_type", "hourly_wage", "monthly_contracted_hours", "work_started_at", "status"]
         # rrn_front는 절대 포함하지 않음 — 민감정보 노출 방지 (2026-08-13 결정)
-
-    def get_status(self, obj):
-        return "ACTIVE"
 
 
 
