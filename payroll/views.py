@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from businesses.models import Business
 from core.responses import error_response, success_response
 from payroll.exceptions import PayrollServiceError
 from payroll.serializers import (
@@ -25,8 +26,33 @@ def _error_response(code: str, message: str, http_status: int, errors: dict | No
     )
 
 
+def _check_business(request, business_id: int):
+    if not request.user or not request.user.is_authenticated:
+        return _error_response(
+            "UNAUTHORIZED",
+            "인증 자격 증명이 제공되지 않았습니다.",
+            status.HTTP_401_UNAUTHORIZED,
+        )
+    business = Business.objects.filter(pk=business_id).first()
+    if not business:
+        return _error_response(
+            "BUSINESS_NOT_FOUND",
+            "사업장을 찾을 수 없습니다.",
+            status.HTTP_404_NOT_FOUND,
+        )
+    if business.owner_id is not None and business.owner_id != request.user.id:
+        return _error_response(
+            "FORBIDDEN_BUSINESS_ACCESS",
+            "해당 사업장에 대한 접근 권한이 없습니다.",
+            status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
 class EmployeeListCreateView(APIView):
     def get(self, request, business_id):
+        if err := _check_business(request, business_id):
+            return err
         employees = employee_service.list_employees(business_id)
         serializer = EmployeeListItemSerializer(employees, many=True)
         return success_response(
@@ -36,6 +62,8 @@ class EmployeeListCreateView(APIView):
         )
 
     def post(self, request, business_id):
+        if err := _check_business(request, business_id):
+            return err
         serializer = EmployeeCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return _error_response(
@@ -57,6 +85,8 @@ class EmployeeListCreateView(APIView):
 
 class EmployeeDetailView(APIView):
     def patch(self, request, business_id, employee_id):
+        if err := _check_business(request, business_id):
+            return err
         serializer = EmployeeUpdateSerializer(data=request.data, partial=True)
         if not serializer.is_valid():
             return _error_response(
@@ -75,6 +105,8 @@ class EmployeeDetailView(APIView):
         )
 
     def delete(self, request, business_id, employee_id):
+        if err := _check_business(request, business_id):
+            return err
         try:
             employee_service.delete_employee(business_id, employee_id)
         except PayrollServiceError as e:
@@ -86,6 +118,8 @@ class EmployeeDetailView(APIView):
 
 class PaymentListCreateView(APIView):
     def get(self, request, business_id):
+        if err := _check_business(request, business_id):
+            return err
         year = request.query_params.get("year")
         month = request.query_params.get("month")
         payments = payment_service.list_payments(
@@ -101,6 +135,8 @@ class PaymentListCreateView(APIView):
         )
 
     def post(self, request, business_id):
+        if err := _check_business(request, business_id):
+            return err
         serializer = PaymentCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return _error_response(
@@ -132,6 +168,8 @@ class PaymentListCreateView(APIView):
 
 class PaymentDetailView(APIView):
     def patch(self, request, business_id, payment_id):
+        if err := _check_business(request, business_id):
+            return err
         serializer = PaymentUpdateSerializer(data=request.data)
         if not serializer.is_valid():
             return _error_response(
@@ -163,6 +201,8 @@ class PaymentDetailView(APIView):
 
 class PayrollSummaryView(APIView):
     def get(self, request, business_id):
+        if err := _check_business(request, business_id):
+            return err
         year = request.query_params.get("year")
         month = request.query_params.get("month")
         if not year or not month:
@@ -184,6 +224,8 @@ class PayrollSummaryView(APIView):
 
 class PaymentPayslipView(APIView):
     def get(self, request, business_id, payment_id):
+        if err := _check_business(request, business_id):
+            return err
         try:
             payment = payment_service.get_payment(business_id, payment_id)
         except PayrollServiceError as e:
@@ -198,6 +240,8 @@ class PaymentPayslipView(APIView):
 
 class PaymentExportView(APIView):
     def post(self, request, business_id):
+        if err := _check_business(request, business_id):
+            return err
         year = request.data.get("year")
         month = request.data.get("month")
         export_format = request.data.get("format")

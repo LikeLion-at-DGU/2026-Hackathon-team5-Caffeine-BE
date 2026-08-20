@@ -9,7 +9,7 @@ class DeepDiagnosisApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.business = Business.objects.create(
-            business_name="진호다방",
+            business_name="수아네 커피집",
             business_number="2148678901",
             tax_type="GENERAL",
         )

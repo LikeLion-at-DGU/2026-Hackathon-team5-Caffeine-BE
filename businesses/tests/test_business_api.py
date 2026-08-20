@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from businesses.models import Business
+from core.test_utils import authenticate_client_for_business
 
 
 class BusinessDetailApiTests(APITestCase):
@@ -13,6 +14,7 @@ class BusinessDetailApiTests(APITestCase):
             business_type="음식점업",
             business_item="커피전문점",
         )
+        authenticate_client_for_business(self, self.business)
 
     def test_get_business_detail(self):
         url = reverse("business-detail", kwargs={"pk": self.business.id})

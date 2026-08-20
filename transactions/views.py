@@ -52,6 +52,22 @@ def _paginated_data(
     }
 
 
+def _check_business_owner(request, business):
+    if not request.user or not request.user.is_authenticated:
+        return error_response(
+            code="UNAUTHORIZED",
+            message="인증 자격 증명이 제공되지 않았습니다.",
+            status=401,
+        )
+    if business.owner_id is not None and business.owner_id != request.user.id:
+        return error_response(
+            code="FORBIDDEN_BUSINESS_ACCESS",
+            message="해당 사업장에 대한 접근 권한이 없습니다.",
+            status=403,
+        )
+    return None
+
+
 def _business_scope(request):
     query = BusinessScopeQuerySerializer(data=request.query_params)
     if not query.is_valid():
@@ -60,7 +76,11 @@ def _business_scope(request):
             message="business_id가 필요하거나 올바르지 않습니다.",
             errors=query.errors,
         )
-    return query.validated_data["business"], None
+    business = query.validated_data["business"]
+    owner_err = _check_business_owner(request, business)
+    if owner_err:
+        return None, owner_err
+    return business, None
 
 
 def _mark_duplicate_relations(items):
@@ -101,6 +121,10 @@ class TransactionSyncView(APIView):
             )
 
         params = serializer.validated_data
+        owner_err = _check_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         from tax.services.closing_service import MonthlyCloseService
 
         if MonthlyCloseService.has_closed_month_between(
@@ -173,6 +197,9 @@ class TransactionSyncRetryView(APIView):
             )
 
         business = serializer.validated_data["business"]
+        owner_err = _check_business_owner(request, business)
+        if owner_err:
+            return owner_err
 
         try:
             result = TransactionSyncService().retry(business)
@@ -227,6 +254,10 @@ class TransactionListView(APIView):
             )
 
         params = query.validated_data
+        owner_err = _check_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         queryset = with_pending_duplicate_flag(
             Transaction.objects.filter(business=params["business"])
         )
@@ -286,6 +317,10 @@ class TransactionExportView(APIView):
             )
 
         params = query.validated_data
+        owner_err = _check_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         queryset = (
             Transaction.objects.filter(business=params["business"])
             .select_related("deduction_review")
@@ -597,6 +632,10 @@ class TransactionDuplicateListView(APIView):
             )
 
         params = query.validated_data
+        owner_err = _check_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         queryset = TransactionDuplicate.objects.select_related(
             "primary_transaction",
             "primary_transaction__deduction_review",

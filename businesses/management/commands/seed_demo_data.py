@@ -1,5 +1,7 @@
 from datetime import date
+from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
+from rest_framework.authtoken.models import Token
 
 from businesses.models import Business, CodefConnection
 from integrations.codef.mock import MockCodefProvider
@@ -17,6 +19,8 @@ from transactions.services.sync_service import TransactionSyncService
 class Command(BaseCommand):
     help = "CODEF Mock부터 진호다방의 3~8월 6개월치 거래·세금·급여·리포트 데모 흐름을 생성합니다."
 
+    DEMO_TOKEN_KEY = "demo-caffeine-token-2026"
+
     def add_arguments(self, parser):
         parser.add_argument("--year-month", default="2026-08")
         parser.add_argument(
@@ -28,6 +32,19 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         year, month = parse_year_month(options["year_month"])
         business_number = "2148678901"
+
+        # 1. 고정 데모 유저 및 토큰 생성
+        demo_user, _ = User.objects.get_or_create(
+            username="demo",
+            defaults={"email": "demo@suanecoffee.com", "first_name": "수아", "last_name": "조"},
+        )
+        demo_user.first_name = "수아"
+        demo_user.last_name = "조"
+        demo_user.email = "demo@suanecoffee.com"
+        demo_user.set_password("demo1234")
+        demo_user.save()
+
+        token, _ = Token.objects.get_or_create(user=demo_user)
 
         if options["reset"]:
             Business.objects.filter(id=1).delete()
@@ -42,9 +59,10 @@ class Command(BaseCommand):
         business, _ = Business.objects.update_or_create(
             id=1,
             defaults={
+                "owner": demo_user,
                 "business_number": business_number,
-                "business_name": "진호다방",
-                "representative_name": "장진호",
+                "business_name": "수아네 커피집",
+                "representative_name": "조수아",
                 "birth_date": "2003-05-24",
                 "phone_number": "010-2458-1046",
                 "industry_code": "552303",
@@ -54,7 +72,7 @@ class Command(BaseCommand):
                 "tax_type": "GENERAL",
                 "tax_type_code": "1",
                 "is_demo": True,
-                "tax_accountant_email": "tax@jinhodabang.com",
+                "tax_accountant_email": "tax@suanecoffee.com",
             },
         )
 
@@ -191,7 +209,9 @@ class Command(BaseCommand):
         except Exception:
             pass
 
-        self.stdout.write(self.style.SUCCESS("진호다방 6개월(3~8월) 신규 데모 데이터 생성 완료"))
+        self.stdout.write(self.style.SUCCESS("수아네 커피집 6개월(3~8월) 신규 데모 데이터 생성 완료"))
+        self.stdout.write(f"demo_user=demo / demo1234")
+        self.stdout.write(f"demo_token={token.key}")
         self.stdout.write(f"business_id={business.id}")
         self.stdout.write(f"business_name={business.business_name}")
         self.stdout.write(f"representative_name={business.representative_name}")

@@ -6,13 +6,25 @@ from benchmark.serializers import BenchmarkQuerySerializer, BenchmarkRefreshSeri
 from benchmark.services.benchmark_service import BenchmarkService
 
 
-def _get_business_or_error(business_id: int):
+def _get_business_or_error(request, business_id: int):
+    if not request.user or not request.user.is_authenticated:
+        return None, error_response(
+            code="UNAUTHORIZED",
+            message="인증 자격 증명이 제공되지 않았습니다.",
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
     business = Business.objects.filter(pk=business_id).first()
     if not business:
         return None, error_response(
             code="BUSINESS_NOT_FOUND",
             message="사업장을 찾을 수 없습니다.",
             status=status.HTTP_404_NOT_FOUND,
+        )
+    if business.owner_id is not None and business.owner_id != request.user.id:
+        return None, error_response(
+            code="FORBIDDEN_BUSINESS_ACCESS",
+            message="해당 사업장에 대한 접근 권한이 없습니다.",
+            status=status.HTTP_403_FORBIDDEN,
         )
     return business, None
 
@@ -21,7 +33,7 @@ class BenchmarkDashboardView(APIView):
     """AI 벤치마크 종합 대시보드 조회 (처방, 도넛점수, 바차트, 라인차트 통합)."""
 
     def get(self, request, business_id):
-        business, err = _get_business_or_error(business_id)
+        business, err = _get_business_or_error(request, business_id)
         if err:
             return err
 
@@ -50,7 +62,7 @@ class BenchmarkCategoriesView(APIView):
     """카테고리별 비용 비교 단독 조회 (바 차트용)."""
 
     def get(self, request, business_id):
-        business, err = _get_business_or_error(business_id)
+        business, err = _get_business_or_error(request, business_id)
         if err:
             return err
 
@@ -84,7 +96,7 @@ class BenchmarkTrendView(APIView):
     """월별 벤치마크 추이 단독 조회 (라인 차트용)."""
 
     def get(self, request, business_id):
-        business, err = _get_business_or_error(business_id)
+        business, err = _get_business_or_error(request, business_id)
         if err:
             return err
 
@@ -118,7 +130,7 @@ class BenchmarkAiDiagnosisRefreshView(APIView):
     """AI 경영 진단 새로고침 (OpenAI 강제 재실행)."""
 
     def post(self, request, business_id):
-        business, err = _get_business_or_error(business_id)
+        business, err = _get_business_or_error(request, business_id)
         if err:
             return err
 
@@ -147,7 +159,7 @@ class BenchmarkDeepDiagnosisView(APIView):
     """8월 경영 종합 진단 리포트 (모달 팝업 전용 심층 진단 데이터)."""
 
     def get(self, request, business_id):
-        business, err = _get_business_or_error(business_id)
+        business, err = _get_business_or_error(request, business_id)
         if err:
             return err
 

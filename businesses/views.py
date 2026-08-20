@@ -1,7 +1,9 @@
 from rest_framework import mixins
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import GenericViewSet
 
+from core.permissions import IsBusinessOwner
 from core.responses import error_response, success_response
 from .models import Business
 from .serializers import (
@@ -23,6 +25,8 @@ class BusinessViewSet(
     GenericViewSet,
 ):
     """사업장 정보 조회/수정 및 CODEF 연동 API."""
+
+    permission_classes = [IsAuthenticated, IsBusinessOwner]
 
     # 조회, 수정(PATCH), CODEF 관련 action만 허용
     http_method_names = ["get", "post", "patch", "head", "options"]
