@@ -296,7 +296,12 @@ class TransactionExportView(APIView):
             queryset = queryset.filter(transaction_date__gte=params["start_date"])
         if params.get("end_date"):
             queryset = queryset.filter(transaction_date__lte=params["end_date"])
-        for field in ["transaction_type", "source_type", "category", "expense_purpose"]:
+        if params.get("transaction_type"):
+            queryset = queryset.filter(transaction_type=params["transaction_type"])
+        else:
+            # 지출 내역 분류 화면에서 내보내기 시 기본적으로 지출(매입) 내역을 내보낸다.
+            queryset = queryset.filter(transaction_type=Transaction.TransactionType.PURCHASE)
+        for field in ["source_type", "category", "expense_purpose"]:
             if params.get(field):
                 queryset = queryset.filter(**{field: params[field]})
 
