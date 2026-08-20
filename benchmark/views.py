@@ -7,6 +7,12 @@ from benchmark.services.benchmark_service import BenchmarkService
 
 
 def _get_business_or_error(request, business_id: int):
+    if not request.user or not request.user.is_authenticated:
+        return None, error_response(
+            code="UNAUTHORIZED",
+            message="인증 자격 증명이 제공되지 않았습니다.",
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
     business = Business.objects.filter(pk=business_id).first()
     if not business:
         return None, error_response(
@@ -14,15 +20,7 @@ def _get_business_or_error(request, business_id: int):
             message="사업장을 찾을 수 없습니다.",
             status=status.HTTP_404_NOT_FOUND,
         )
-    if business.is_demo or business.owner_id is None:
-        return business, None
-    if not request.user or not request.user.is_authenticated:
-        return None, error_response(
-            code="UNAUTHORIZED",
-            message="인증 자격 증명이 제공되지 않았습니다.",
-            status=status.HTTP_401_UNAUTHORIZED,
-        )
-    if business.owner_id != request.user.id:
+    if business.owner_id is not None and business.owner_id != request.user.id:
         return None, error_response(
             code="FORBIDDEN_BUSINESS_ACCESS",
             message="해당 사업장에 대한 접근 권한이 없습니다.",
