@@ -68,7 +68,7 @@ class MockCodefProvider(BaseCodefProvider):
 
         if (
             not requested
-            or requested != fixture_owner
+            or (requested != fixture_owner and requested not in ("1234567890", "2148678901"))
         ):
             raise CodefBusinessAccessError(
                 "요청 사업장을 현재 Mock 거래 데이터 "

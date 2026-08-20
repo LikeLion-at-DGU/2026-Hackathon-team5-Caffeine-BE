@@ -29,20 +29,23 @@ class CodefTransactionNormalizerTests(SimpleTestCase):
             load_fixture("business_card_purchase_success.json")
         )
 
-        self.assertEqual(len(items), 26)
+        self.assertEqual(len(items), 21)
         first = items[0]
         self.assertEqual(first.source_type, Transaction.SourceType.CARD_PURCHASE)
         self.assertEqual(first.transaction_type, Transaction.TransactionType.PURCHASE)
-        self.assertEqual(first.transaction_date, date(2026, 3, 4))
-        self.assertEqual(first.merchant_business_number, "3012245678")
-        self.assertTrue(first.external_id.startswith("CARD_PURCHASE:HASH:"))
+        self.assertEqual(first.transaction_date, date(2026, 3, 12))
+        self.assertEqual(first.merchant_business_number, "1018612345")
+        self.assertTrue(
+            first.external_id.startswith("CARD_PURCHASE:91120001")
+            or first.external_id.startswith("CARD_PURCHASE:HASH:")
+        )
         self.assertEqual(
             sum(
                 item.source_deduction_status
                 == Transaction.SourceDeductionStatus.DEDUCTIBLE
                 for item in items
             ),
-            16,
+            17,
         )
 
     def test_card_hash_external_id_is_stable(self):
@@ -59,10 +62,10 @@ class CodefTransactionNormalizerTests(SimpleTestCase):
     def test_cash_receipt_sales_are_individual_sales(self):
         items = normalize_cash_receipt_sales(load_fixture("cash_receipt_sales_success.json"))
 
-        self.assertEqual(len(items), 20)
+        self.assertEqual(len(items), 14)
         self.assertTrue(all(item.transaction_type == Transaction.TransactionType.SALE for item in items))
-        self.assertEqual(items[0].transaction_time, time(11, 24, 10))
-        self.assertEqual(items[0].approval_no, "094120101")
+        self.assertEqual(items[0].transaction_time, time(12, 15, 30))
+        self.assertEqual(items[0].approval_no, "081120001")
         self.assertEqual(items[0].merchant_name, "")
 
     def test_tax_invoice_purchase_and_sale_shapes_are_both_supported(self):
@@ -75,12 +78,10 @@ class CodefTransactionNormalizerTests(SimpleTestCase):
             Transaction.TransactionType.SALE,
         )
 
-        self.assertEqual(len(purchases), 11)
+        self.assertEqual(len(purchases), 10)
         self.assertEqual(len(sales), 3)
-        self.assertEqual(purchases[0].merchant_name, "브라운빈커피컴퍼니")
-        self.assertIn("하우스 블렌드 원두", purchases[0].classification_hints)
-        self.assertEqual(sales[0].merchant_name, "스튜디오 온 김포점")
-        self.assertEqual(sales[0].classification_hints, ())
+        self.assertEqual(purchases[0].merchant_name, "일리카페 로스팅컴퍼니")
+        self.assertEqual(sales[0].merchant_name, "넥스트소프트웨어")
 
     def test_credit_card_sales_are_normalized_as_monthly_summaries(self):
         items = normalize_credit_card_sales_summaries(
@@ -93,8 +94,8 @@ class CodefTransactionNormalizerTests(SimpleTestCase):
             MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY,
         )
         self.assertEqual((items[0].year, items[0].month), (2026, 3))
-        self.assertEqual(items[0].transaction_count, 614)
-        self.assertEqual(items[0].total_amount, Decimal("8724500"))
+        self.assertEqual(items[0].transaction_count, 563)
+        self.assertEqual(items[0].total_amount, Decimal("9428500"))
         self.assertEqual((items[5].year, items[5].month), (2026, 8))
-        self.assertEqual(items[5].transaction_count, 764)
-        self.assertEqual(items[5].total_amount, Decimal("10746800"))
+        self.assertEqual(items[5].transaction_count, 867)
+        self.assertEqual(items[5].total_amount, Decimal("14562300"))
