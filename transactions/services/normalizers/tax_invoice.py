@@ -60,8 +60,12 @@ def normalize_tax_invoices(payload, transaction_type):
                 ),
                 merchant_name=str(merchant_name or "").strip(),
                 merchant_business_number=normalized_business_number(merchant_number),
-                supply_amount=parse_decimal(record.get("resSupplyValue")),
-                vat_amount=parse_decimal(record.get("resTaxAmt")),
+                supply_amount=parse_decimal(
+                    record.get("resSupplyValue") or record.get("resSupplyAmount")
+                ),
+                vat_amount=parse_decimal(
+                    record.get("resTaxAmt") or record.get("resTax")
+                ),
                 total_amount=parse_decimal(record.get("resTotalAmount")),
                 approval_no=approval_no,
                 owner_business_number=normalized_business_number(owner_number),
