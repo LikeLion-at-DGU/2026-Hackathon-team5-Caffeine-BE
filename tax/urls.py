@@ -7,6 +7,7 @@ from .views import (
     DeductionListView,
     MonthlyCloseApproveView,
     MonthlyCloseDetailView,
+    MonthlyCloseReopenView,
     VatForecastView,
 )
 
@@ -38,5 +39,10 @@ urlpatterns = [
         "closing/<str:year_month>/approve/",
         MonthlyCloseApproveView.as_view(),
         name="tax-monthly-close-approve",
+    ),
+    path(
+        "closing/<str:year_month>/reopen/",
+        MonthlyCloseReopenView.as_view(),
+        name="tax-monthly-close-reopen",
     ),
 ]

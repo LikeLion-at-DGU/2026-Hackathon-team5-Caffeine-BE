@@ -128,7 +128,7 @@ class Command(BaseCommand):
                 },
             )
 
-        # 3월 ~ 8월 6개월간 매월 급여 생성 및 마감 처리
+        # 3월 ~ 8월 6개월간 매월 급여 생성
         for m in range(3, 9):
             for emp in Employee.objects.filter(business=business):
                 if not Payment.objects.filter(employee=emp, year=2026, month=m).exists():
@@ -140,9 +140,14 @@ class Command(BaseCommand):
                         emp.monthly_contracted_hours,
                     )
 
+        # 3월 ~ 7월 과거 월은 마감(CLOSED) 처리
+        for m in range(3, 8):
             close = MonthlyClose.objects.filter(business=business, year=2026, month=m).first()
             if close is None or close.status != MonthlyClose.Status.CLOSED:
                 MonthlyCloseService.approve(business=business, year=2026, month=m)
+
+        # 8월(현재 월)은 사용자가 지출 내역 분류를 직접 조작해볼 수 있도록 마감을 열어둔다.
+        MonthlyClose.objects.filter(business=business, year=2026, month=8).delete()
 
         report = generate_report(business.id, options["year_month"])
 
