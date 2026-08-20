@@ -1,6 +1,6 @@
 from datetime import date
 from django.contrib.auth.models import User
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from rest_framework.authtoken.models import Token
 
 from businesses.models import Business, CodefConnection
@@ -44,7 +44,27 @@ class Command(BaseCommand):
         demo_user.set_password("demo1234")
         demo_user.save()
 
-        token, _ = Token.objects.get_or_create(user=demo_user)
+        # 프론트엔드가 로그인 없이도 고정 토큰으로 데모 API를 호출할 수 있도록
+        # 매번 동일한 키를 보장한다. 같은 키가 다른 사용자에게 할당된 경우에는
+        # 해당 사용자의 인증정보를 빼앗지 않고 명시적으로 실패한다.
+        token_with_fixed_key = Token.objects.filter(
+            key=self.DEMO_TOKEN_KEY,
+        ).first()
+        if (
+            token_with_fixed_key is not None
+            and token_with_fixed_key.user_id != demo_user.id
+        ):
+            raise CommandError(
+                "고정 데모 토큰이 이미 다른 사용자에게 할당되어 있습니다."
+            )
+
+        Token.objects.filter(user=demo_user).exclude(
+            key=self.DEMO_TOKEN_KEY,
+        ).delete()
+        token, _ = Token.objects.get_or_create(
+            key=self.DEMO_TOKEN_KEY,
+            defaults={"user": demo_user},
+        )
 
         if options["reset"]:
             Business.objects.filter(id=1).delete()
