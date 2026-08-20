@@ -7,8 +7,8 @@ from transactions.models import MonthlySalesSummary, Transaction
 from payroll.models import Payment
 from benchmark.models import IndustryBenchmark
 from benchmark.services.calculator import BenchmarkCalculator
-from core.llm import get_client
 from django.conf import settings
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -40,21 +40,16 @@ class DeepDiagnosisService:
         net_profit = total_revenue - total_expense
         profit_margin = round(float(net_profit / total_revenue * 100), 1) if total_revenue > 0 else 0.0
 
-        # 3. 최근 6개월 평균 매출 계산 (달마다 aggregate()를 반복 호출하지 않고 단일 쿼리로 조회)
-        months_window = range(max(1, month - 5), month + 1)
-        monthly_totals = {
-            row["month"]: row["total"]
-            for row in MonthlySalesSummary.objects.filter(
+        # 3. 최근 6개월 평균 매출 계산
+        m_sales_list = []
+        for m in range(max(1, month - 5), month + 1):
+            s = MonthlySalesSummary.objects.filter(
                 business=business,
                 year=year,
-                month__in=months_window,
-            )
-            .values("month")
-            .annotate(total=Sum("total_amount"))
-        }
-        m_sales_list = [
-            monthly_totals[m] for m in months_window if monthly_totals.get(m, Decimal("0")) > 0
-        ]
+                month=m,
+            ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
+            if s > 0:
+                m_sales_list.append(s)
         avg_revenue_6m = int(sum(m_sales_list) / len(m_sales_list)) if m_sales_list else int(total_revenue)
         rev_vs_6m_pct = round(((float(total_revenue) - avg_revenue_6m) / avg_revenue_6m) * 100, 1) if avg_revenue_6m > 0 else 0.0
 
@@ -184,7 +179,10 @@ class DeepDiagnosisService:
         # 7. OpenAI GPT 실시간 심층 작문 시도
         if settings.OPENAI_API_KEY:
             try:
-                client = get_client()
+                client = OpenAI(
+                    api_key=settings.OPENAI_API_KEY,
+                    timeout=getattr(settings, "OPENAI_TIMEOUT_SECONDS", 20.0),
+                )
                 prompt_input = f"""
 당신은 자영업 카페 사장님을 위한 최고재무책임자(CFO) AI입니다.
 아래 매장의 8월 실제 경영/재무 수치를 보고, 심층 진단 헤드라인과 우선 실행 과제 3단계를 JSON 형식으로 작성하세요.

@@ -7,7 +7,7 @@
 [![Django](https://img.shields.io/badge/Django-5.2-092E20?style=flat&logo=django&logoColor=white)](https://djangoproject.com)
 [![DRF](https://img.shields.io/badge/DRF-3.16-red?style=flat)](https://www.django-rest-framework.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--5.6--Luna-412991?style=flat&logo=openai&logoColor=white)](https://openai.com)
-[![Tests](https://img.shields.io/badge/Unit%20Tests-359%20Passed-brightgreen?style=flat)]()
+[![Tests](https://img.shields.io/badge/Unit%20Tests-347%20Passed-brightgreen?style=flat)]()
 [![API Docs](https://img.shields.io/badge/Swagger-OpenAPI%203.0-85EA2D?style=flat&logo=swagger&logoColor=black)](https://backendkingjinho.shop/api/schema/swagger-ui/)
 [![Deploy](https://img.shields.io/badge/Deploy-Gabia%20Ubuntu%20%7C%20HTTPS-blue?style=flat)](https://backendkingjinho.shop)
 
@@ -84,9 +84,8 @@ flowchart TD
 ## 🔒 보안 및 소유권 격리 (IDOR Protection)
 
 - **DRF TokenAuthentication**: 헤더 기반 RESTful 토큰 인증 체계 (`Authorization: Token <key>`)
-- **Business Ownership Guard**: 사업장에 접근하는 모든 API 엔드포인트에서 현재 로그인된 유저의 사업장 소유권(`owner=request.user`)을 검증하여 타 유저의 사업장 데이터 무단 열람/변조를 원천 차단 (`403 Forbidden` 방어, `core/permissions.py`에 단일화)
+- **Business Ownership Guard**: 모든 API 엔드포인트(48개)에서 현재 로그인된 유저의 사업장 소유권(`owner=request.user`)을 검증하여 타 유저의 사업장 데이터 무단 열람/변조를 원천 차단 (`403 Forbidden` 방어)
 - **개인정보 보호**: 근로자 주민등록번호 및 계좌정보 AES-256 Fernet 양방향 암호화 저장
-- **데모 게스트 인증 (의도된 설계)**: 부스 시연 편의를 위해 무인증 요청을 데모 계정으로 인증하되(`DEMO_MODE`), 해당 요청은 `is_demo=True`로 시딩된 사업장에만 접근 가능하도록 권한 계층에서 강제합니다(`core/authentication.py`, `core/permissions.py`). 실 사용자 사업장은 `is_demo=False`이므로 게스트 토큰으로는 도달할 수 없습니다. 실서비스 전환 시 `.env`에 `DEMO_MODE=0`을 설정하세요.
 
 ---
 
@@ -161,7 +160,7 @@ python manage.py runserver
 ## 🧪 테스트 실행
 
 ```bash
-# 전체 359개 단위/통합/보안 테스트 및 시스템 점검 실행
+# 전체 347개 단위/통합/보안 테스트 및 시스템 점검 실행
 python manage.py test
 python manage.py check
 ```

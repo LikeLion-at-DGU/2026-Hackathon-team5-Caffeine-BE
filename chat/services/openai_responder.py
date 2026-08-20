@@ -3,9 +3,9 @@ import logging
 from urllib.parse import urlparse
 
 from django.conf import settings
+from openai import OpenAI
 
 from chat.models import ChatMessage
-from core.llm import get_client
 from tax.services.periods import month_range
 from transactions.services.querysets import effective_transactions
 
@@ -51,7 +51,10 @@ class OpenAIChatResponder:
                 business=business,
                 current_message=message,
             )
-            client = get_client(client=self.client)
+            client = self.client or OpenAI(
+                api_key=settings.OPENAI_API_KEY,
+                timeout=settings.OPENAI_TIMEOUT_SECONDS,
+            )
             response = client.responses.create(
                 model=settings.OPENAI_MODEL,
                 instructions=self._instructions(is_first_turn=is_first_turn),

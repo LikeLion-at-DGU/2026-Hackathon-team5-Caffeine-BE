@@ -13,7 +13,6 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-from django.core.exceptions import ImproperlyConfigured
 from cryptography.fernet import Fernet
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -21,34 +20,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
 
-IS_TEST_RUN = "test" in sys.argv
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-5l()ew9)0in=29ppj$m^uge_+eppw8mtzgkkhb0!g%fkki12ju",
+)
+
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DJANGO_DEBUG", "False").strip().lower() in (
+DEBUG = os.environ.get("DJANGO_DEBUG", "True").strip().lower() in (
     "true",
     "1",
     "yes",
     "y",
 )
-
-# 배포(DEBUG=False)에서는 DJANGO_SECRET_KEY가 반드시 있어야 한다.
-# 로컬 개발/테스트에서만 고정 폴백을 허용한다.
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or (
-    "django-insecure-5l()ew9)0in=29ppj$m^uge_+eppw8mtzgkkhb0!g%fkki12ju"
-    if DEBUG or IS_TEST_RUN
-    else None
-)
-if not SECRET_KEY:
-    raise ImproperlyConfigured(
-        "DJANGO_SECRET_KEY 환경변수가 설정되어야 합니다 (DEBUG=False인 배포 환경)."
-    )
-
-# DEBUG/테스트가 아닌 실제 배포 환경 여부. 프록시 뒤 HTTPS 강제 등 배포 전용 설정에 사용한다.
-IS_PRODUCTION = not DEBUG and not IS_TEST_RUN
 
 # 로컬 Mock/테스트는 별도 설정 없이 실행하되, 실제 배포에서는 반드시 환경변수로 교체한다.
 APP_ENCRYPTION_KEY = (
@@ -207,8 +195,8 @@ CODEF_TIMEOUT_SECONDS = float(
 )
 CODEF_PUBLIC_KEY = os.environ.get("CODEF_PUBLIC_KEY", "").strip()
 
-# 서울시 열린데이터광장(공공데이터 포털) 상권분석 OpenAPI 일반 인증키. 반드시 .env로만 주입한다.
-SEOUL_DATA_API_KEY = os.environ.get("SEOUL_DATA_API_KEY", "").strip()
+# 서울시 열린데이터광장(공공데이터 포털) 상권분석 OpenAPI 일반 인증키 (공개 API 기본키)
+SEOUL_DATA_API_KEY = os.environ.get("SEOUL_DATA_API_KEY", "50645279656a35373938654e4e424d").strip()
 SEOUL_DATA_API_BASE_URL = os.environ.get("SEOUL_DATA_API_BASE_URL", "http://openapi.seoul.go.kr:8088").strip().rstrip("/")
 SEOUL_DATA_TIMEOUT_SECONDS = float(os.environ.get("SEOUL_DATA_TIMEOUT_SECONDS", "10"))
 
@@ -261,12 +249,7 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
 }
 
-CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "False").strip().lower() in (
-    "true",
-    "1",
-    "yes",
-    "y",
-)
+CORS_ALLOW_ALL_ORIGINS = True  # 해커톤 프론트엔드(Flutter/Web/Local) 전면 허용
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
@@ -280,56 +263,4 @@ CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_URL = "/media/"
-
-# ---------------------------------------------------------------------------
-# 이메일 (세무사 리포트 발송)
-# ---------------------------------------------------------------------------
-# EMAIL_HOST_USER가 설정되면 실제 SMTP로 발송하고, 없으면 콘솔 백엔드로 대체한다.
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "").strip()
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "").strip()
-EMAIL_BACKEND = (
-    "django.core.mail.backends.smtp.EmailBackend"
-    if EMAIL_HOST_USER
-    else "django.core.mail.backends.console.EmailBackend"
-)
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com").strip()
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER or "no-reply@caffeine.local"
-
-# ---------------------------------------------------------------------------
-# 배포 보안 헤더
-# ---------------------------------------------------------------------------
-# nginx가 X-Forwarded-Proto를 넘겨주므로, 이를 신뢰해 Django가 요청이 HTTPS인지
-# 판단하게 한다. IS_PRODUCTION 가드는 테스트/로컬 dev(DEBUG=True)에서
-# 리다이렉트나 secure 쿠키 때문에 요청이 막히지 않도록 하기 위함이다.
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SECURE_SSL_REDIRECT = IS_PRODUCTION
-SESSION_COOKIE_SECURE = IS_PRODUCTION
-CSRF_COOKIE_SECURE = IS_PRODUCTION
-SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "0"))
-SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
-SECURE_HSTS_PRELOAD = SECURE_HSTS_SECONDS > 0
-SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = "DENY"
-
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "verbose": {
-            "format": "[{asctime}] {levelname} {name}: {message}",
-            "style": "{",
-        },
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "verbose",
-        },
-    },
-    "root": {
-        "handlers": ["console"],
-        "level": os.environ.get("DJANGO_LOG_LEVEL", "INFO"),
-    },
-}
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # 개발용
