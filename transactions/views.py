@@ -517,7 +517,7 @@ class TransactionPurposeView(APIView):
             suggested = review.suggested_status or DeductionReview.SuggestedStatus.DEDUCTIBLE
             confirmed = (
                 DeductionReview.ConfirmedStatus.DEDUCTIBLE
-                if str(suggested) == "DEDUCTIBLE"
+                if str(suggested) in ("DEDUCTIBLE", "DEDUCTIBLE_CANDIDATE")
                 else DeductionReview.ConfirmedStatus.NON_DEDUCTIBLE
             )
             DeductionReviewService.confirm(review=review, confirmed_status=confirmed)
