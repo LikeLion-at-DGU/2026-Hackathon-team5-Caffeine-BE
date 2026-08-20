@@ -1,4 +1,5 @@
-from decimal import Decimal
+﻿from decimal import Decimal
+import json
 import logging
 from django.db.models import Sum
 from businesses.models import Business
@@ -7,12 +8,13 @@ from payroll.models import Payment
 from benchmark.models import IndustryBenchmark
 from benchmark.services.calculator import BenchmarkCalculator
 from django.conf import settings
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
 
 class DeepDiagnosisService:
-    """8월 경영 종합 진단 리포트 (모달 팝업 전용 심층 진단 서비스)."""
+    """8월 경영 종합 진단 리포트 (모달 팝업 전용 심층 진단 서비스 - OpenAI 실시간 추론 연동)."""
 
     @classmethod
     def get_deep_diagnosis(cls, business: Business, year: int, month: int) -> dict:
@@ -107,7 +109,7 @@ class DeepDiagnosisService:
             "margin_diff_pct": margin_diff,
         }
 
-        # 6. 종합 한줄평 & AI 심층 인사이트
+        # 6. 기본 동적 계산 값 구성 (Fallback)
         diff_labor_raw = round(labor_ratio - raw_mat_ratio, 1)
         headline = f"수익성은 {profit_margin}%로 양호하나, 인건비가 총지출의 {cost_structure_diagnosis[0]['share_of_expense']}%를 차지해 핵심 관리 포인트입니다."
 
@@ -173,6 +175,52 @@ class DeepDiagnosisService:
                 "level": "GOAL",
             },
         ]
+
+        # 7. OpenAI GPT 실시간 심층 작문 시도
+        if settings.OPENAI_API_KEY:
+            try:
+                client = OpenAI(
+                    api_key=settings.OPENAI_API_KEY,
+                    timeout=getattr(settings, "OPENAI_TIMEOUT_SECONDS", 20.0),
+                )
+                prompt_input = f"""
+당신은 자영업 카페 사장님을 위한 최고재무책임자(CFO) AI입니다.
+아래 매장의 8월 실제 경영/재무 수치를 보고, 심층 진단 헤드라인과 우선 실행 과제 3단계를 JSON 형식으로 작성하세요.
+
+[매장 8월 실제 경영 지표]
+- 매장명: {business.business_name}
+- 8월 실제 매출: {int(total_revenue):,}원 (6개월 평균 대비 {rev_vs_6m_pct:+.1f}%)
+- 8월 실제 지출: {int(total_expense):,}원
+- 순 영업이익: {int(net_profit):,}원 (영업이익률: {profit_margin}%)
+- 인건비: {int(payroll_cost):,}원 (비중: {labor_ratio}%, 총지출의 {cost_structure_diagnosis[0]['share_of_expense']}%)
+- 식자재비: {int(raw_material_cost):,}원 (비중: {raw_mat_ratio}%)
+- 포장재비: {int(supplies_cost):,}원 (비중: {supplies_ratio}%)
+
+아래 JSON 구조로만 응답하세요:
+{{
+  "headline": "수익성은 {profit_margin}%로 양호하나, 인건비가 총지출의 {cost_structure_diagnosis[0]['share_of_expense']}%를 차지해 핵심 관리 포인트입니다.",
+  "priority_action_tasks": [
+    {{"rank": 1, "priority_label": "1순위", "category": "인건비", "task": "11~14시 / 14~17시 피크타임 외 투입 인원 생산성 점검", "level": "HIGH"}},
+    {{"rank": 2, "priority_label": "2순위", "category": "식자재", "task": "원두/우유 품목별 서브 매입 단가 점검 및 B2B 도매몰 활용", "level": "MEDIUM"}},
+    {{"rank": 3, "priority_label": "목표설정", "category": "목표설정", "task": "9월 매출 목표 {int(total_revenue * Decimal('1.05')) / 10000:.0f}만 원 및 이익률 {profit_margin}% 유지", "level": "GOAL"}}
+  ]
+}}
+"""
+                ai_resp = client.chat.completions.create(
+                    model=getattr(settings, "OPENAI_MODEL", "gpt-5.6-luna"),
+                    messages=[
+                        {"role": "system", "content": "당신은 냉철하고 실전적인 재무 분석 AI 컨설턴트입니다. 오직 유효한 JSON 형식으로만 응답하세요."},
+                        {"role": "user", "content": prompt_input},
+                    ],
+                    response_format={"type": "json_object"},
+                )
+                parsed = json.loads(ai_resp.choices[0].message.content)
+                if parsed.get("headline"):
+                    overall_summary["headline"] = parsed["headline"]
+                if parsed.get("priority_action_tasks") and isinstance(parsed["priority_action_tasks"], list):
+                    priority_action_tasks = parsed["priority_action_tasks"]
+            except Exception as exc:
+                logger.warning("Deep diagnosis OpenAI call failed, using dynamic fallback: %s", exc)
 
         return {
             "business_id": business.id,
