@@ -1,11 +1,28 @@
 {
+  "result": {
     "code": "CF-00000",
+    "extraMessage": "",
     "message": "성공",
-    "extraMessage": null,
-    "resCompanyIdentityNo": "1234567890",
-    "resBusinessStatus": "계속사업자",
-    "taxation_type_code": "1",
-    "resTaxationTypeCode": "1",
-    "resClosingDate": "",
-    "resTransferTaxTypeDate": "20260101"
+    "transactionId": "5f19e7a03bc214d89a72e810"
+  },
+  "data": [
+    {
+      "resBusinessStatus": "부가가치세일반과세자입니다.",
+      "resCompanyIdentityNo": "1234567890",
+      "code": "CF-00000",
+      "resTaxationTypeCode": "1",
+      "extraMessage": null,
+      "resClosingDate": "",
+      "resTransferTaxTypeDate": "20260101",
+      "message": "성공"
+    }
+  ],
+  "code": "CF-00000",
+  "message": "성공",
+  "resCompanyIdentityNo": "1234567890",
+  "resBusinessStatus": "부가가치세일반과세자입니다.",
+  "taxation_type_code": "1",
+  "resTaxationTypeCode": "1",
+  "resClosingDate": "",
+  "resTransferTaxTypeDate": "20260101"
 }

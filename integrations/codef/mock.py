@@ -88,45 +88,44 @@ class MockCodefProvider(BaseCodefProvider):
         raw = load_fixture(
             "business_status_success.json"
         )
-        code = raw.get("code", "")
+        # result 객체 또는 최상위 code 확인
+        result = raw.get("result", {})
+        code = result.get("code") or raw.get("code", "")
 
         if code != _SUCCESS:
             return {
                 "outcome": "FAILURE",
                 "error_code": code,
-                "error_message": raw.get(
-                    "message",
-                    "",
-                ),
+                "error_message": result.get("message") or raw.get("message", ""),
             }
+
+        # data 배열이 있으면 첫 번째 요소, 없으면 raw 본문 참조
+        item = raw.get("data", [{}])[0] if isinstance(raw.get("data"), list) and raw.get("data") else raw
 
         return {
             "outcome": "SUCCESS",
-            "company_identity_no":
-                raw.get(
-                    "resCompanyIdentityNo",
-                    "",
-                ),
-            "business_status":
-                raw.get(
-                    "resBusinessStatus",
-                    "",
-                ),
-            "taxation_type_code":
-                raw.get(
-                    "resTaxationTypeCode",
-                    "",
-                ),
-            "closing_date":
-                raw.get(
-                    "resClosingDate",
-                    "",
-                ),
-            "transfer_tax_type_date":
-                raw.get(
-                    "resTransferTaxTypeDate",
-                    "",
-                ),
+            "company_identity_no": (
+                item.get("resCompanyIdentityNo")
+                or raw.get("resCompanyIdentityNo", "")
+            ),
+            "business_status": (
+                item.get("resBusinessStatus")
+                or raw.get("resBusinessStatus", "")
+            ),
+            "taxation_type_code": (
+                item.get("resTaxationTypeCode")
+                or item.get("taxation_type_code")
+                or raw.get("resTaxationTypeCode")
+                or raw.get("taxation_type_code", "")
+            ),
+            "closing_date": (
+                item.get("resClosingDate")
+                or raw.get("resClosingDate", "")
+            ),
+            "transfer_tax_type_date": (
+                item.get("resTransferTaxTypeDate")
+                or raw.get("resTransferTaxTypeDate", "")
+            ),
         }
 
     # ==================================================
