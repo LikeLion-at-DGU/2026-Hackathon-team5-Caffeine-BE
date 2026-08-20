@@ -1,11 +1,7 @@
 ﻿from decimal import Decimal
 import json
 import logging
-from django.db.models import Sum
 from businesses.models import Business
-from transactions.models import MonthlySalesSummary, Transaction
-from payroll.models import Payment
-from benchmark.models import IndustryBenchmark
 from benchmark.services.calculator import BenchmarkCalculator
 from core.llm import get_client
 from django.conf import settings
@@ -40,21 +36,18 @@ class DeepDiagnosisService:
         net_profit = total_revenue - total_expense
         profit_margin = round(float(net_profit / total_revenue * 100), 1) if total_revenue > 0 else 0.0
 
-        # 3. 최근 6개월 평균 매출 계산 (달마다 aggregate()를 반복 호출하지 않고 단일 쿼리로 조회)
-        months_window = range(max(1, month - 5), month + 1)
-        monthly_totals = {
-            row["month"]: row["total"]
-            for row in MonthlySalesSummary.objects.filter(
-                business=business,
-                year=year,
-                month__in=months_window,
-            )
-            .values("month")
-            .annotate(total=Sum("total_amount"))
-        }
-        m_sales_list = [
-            monthly_totals[m] for m in months_window if monthly_totals.get(m, Decimal("0")) > 0
-        ]
+        # 3. 최근 6개월 평균 매출. 카드 집계뿐 아니라 건별 매출까지 포함하고
+        # 1~5월에도 전년도 월을 정상적으로 포함한다.
+        m_sales_list = []
+        for offset in range(-5, 1):
+            t_year, t_month = BenchmarkCalculator._shift_month(year, month, offset)
+            revenue = BenchmarkCalculator._calculate_month_metrics(
+                business,
+                t_year,
+                t_month,
+            )["total_revenue"]
+            if revenue > 0:
+                m_sales_list.append(revenue)
         avg_revenue_6m = int(sum(m_sales_list) / len(m_sales_list)) if m_sales_list else int(total_revenue)
         rev_vs_6m_pct = round(((float(total_revenue) - avg_revenue_6m) / avg_revenue_6m) * 100, 1) if avg_revenue_6m > 0 else 0.0
 
@@ -182,7 +175,7 @@ class DeepDiagnosisService:
         ]
 
         # 7. OpenAI GPT 실시간 심층 작문 시도
-        if settings.OPENAI_API_KEY:
+        if settings.OPENAI_API_KEY and not getattr(settings, "IS_TEST_RUN", False):
             try:
                 client = get_client()
                 prompt_input = f"""

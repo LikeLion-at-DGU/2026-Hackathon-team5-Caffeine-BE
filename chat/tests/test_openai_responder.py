@@ -184,6 +184,39 @@ class OpenAIChatResponderTests(TestCase):
             second_payroll["total_labor_cost"],
         )
 
+    def test_multi_month_payroll_question_supplies_every_requested_month(self):
+        employee = Employee.objects.create(
+            business=self.business,
+            name="비교직원",
+            employment_type="PART_TIME",
+            hourly_wage=10_000,
+            is_long_term_contract=True,
+        )
+        payment_service.create_payment(self.business.id, employee.id, 2026, 6, 60)
+        payment_service.create_payment(self.business.id, employee.id, 2026, 7, 80)
+        client = Mock()
+        client.responses.create.return_value = SimpleNamespace(
+            output_text="6월과 7월 인건비를 비교했어요.",
+            output=[],
+            usage=None,
+        )
+
+        OpenAIChatResponder(client=client).reply(
+            business=self.business,
+            message="2026년 6월과 7월 인건비를 비교해줘",
+            year=2026,
+            month=8,
+        )
+
+        context = json.loads(client.responses.create.call_args.kwargs["input"])
+        comparison = context["SERVICE_CONTEXT"]["PERIOD_COMPARISON"]
+        self.assertEqual(context["SELECTED_PERIODS"], ["2026-06", "2026-07"])
+        self.assertEqual([item["year_month"] for item in comparison], ["2026-06", "2026-07"])
+        self.assertLess(
+            comparison[0]["payroll"]["total_gross_pay"],
+            comparison[1]["payroll"]["total_gross_pay"],
+        )
+
     def test_official_citations_are_exposed_and_appended_as_links(self):
         client = Mock()
         client.responses.create.return_value = SimpleNamespace(

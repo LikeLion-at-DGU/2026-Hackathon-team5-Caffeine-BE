@@ -5,6 +5,7 @@ from django.test import TestCase, override_settings
 from businesses.models import Business
 from benchmark.services.calculator import BenchmarkCalculator
 from benchmark.services.ai_diagnostician import AIDiagnostician, RuleBasedDiagnostician
+from transactions.models import MonthlySalesSummary
 
 
 class AIDiagnosticianTests(TestCase):
@@ -18,9 +19,9 @@ class AIDiagnosticianTests(TestCase):
     def test_rule_based_fallback_returns_structured_diagnosis(self):
         result = RuleBasedDiagnostician.diagnose(self.calc)
 
-        # diff_pct 계산 로직에 따라 86점이 나올 수 있음
-        self.assertEqual(result.score, 86)
-        self.assertEqual(result.grade_label, "양호 — 상위 20% 매장")
+        # 데이터가 전혀 없는 매장을 상위 매장으로 오판하지 않는다.
+        self.assertEqual(result.score, 45)
+        self.assertEqual(result.grade_label, "위험 — 비용 구조 개선 필요")
         self.assertEqual(len(result.prescriptions), 3)
         self.assertEqual(len(result.summary_points), 3)
         self.assertTrue(result.is_fallback)
@@ -35,6 +36,15 @@ class AIDiagnosticianTests(TestCase):
 
     @override_settings(OPENAI_API_KEY="mock-openai-key")
     def test_diagnose_with_mock_openai_success(self):
+        MonthlySalesSummary.objects.create(
+            business=self.business,
+            year=2026,
+            month=8,
+            source_type=MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY,
+            total_amount=20_000_000,
+            transaction_count=100,
+        )
+        self.calc = BenchmarkCalculator.calculate(self.business, year=2026, month=8)
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_choice = MagicMock()

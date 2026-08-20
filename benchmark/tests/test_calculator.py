@@ -45,6 +45,7 @@ class BenchmarkCalculatorTests(TestCase):
             transaction_type=Transaction.TransactionType.PURCHASE,
             source_type=Transaction.SourceType.CARD_PURCHASE,
             category=Transaction.Category.RAW_MATERIAL,
+            expense_purpose=Transaction.ExpensePurpose.BUSINESS,
             total_amount=Decimal("4380000"),
             supply_amount=Decimal("3981818"),
             vat_amount=Decimal("398182"),
@@ -75,3 +76,44 @@ class BenchmarkCalculatorTests(TestCase):
         self.assertEqual(result.raw_material_diff_pct, 4.5)
         self.assertEqual(len(result.category_comparison), 4)
         self.assertEqual(len(result.monthly_trends), 6)
+
+    def test_empty_month_does_not_invent_demo_revenue_or_expenses(self):
+        result = BenchmarkCalculator.calculate(self.business, year=2026, month=7)
+
+        self.assertEqual(result.total_revenue, 0)
+        self.assertEqual(result.total_expense, 0)
+        self.assertEqual(result.raw_material_ratio, 0.0)
+
+    def test_revenue_sources_are_combined_and_personal_expense_is_excluded(self):
+        MonthlySalesSummary.objects.create(
+            business=self.business,
+            year=2026,
+            month=8,
+            source_type=MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY,
+            total_amount=Decimal("9000000"),
+            transaction_count=90,
+        )
+        Transaction.objects.create(
+            business=self.business,
+            external_id="SALE-CASH-1",
+            transaction_date="2026-08-03",
+            transaction_type=Transaction.TransactionType.SALE,
+            source_type=Transaction.SourceType.CASH_RECEIPT_SALE,
+            total_amount=Decimal("500000"),
+        )
+        Transaction.objects.create(
+            business=self.business,
+            external_id="PERSONAL-1",
+            transaction_date="2026-08-04",
+            transaction_type=Transaction.TransactionType.PURCHASE,
+            source_type=Transaction.SourceType.CARD_PURCHASE,
+            expense_purpose=Transaction.ExpensePurpose.PERSONAL,
+            category=Transaction.Category.RAW_MATERIAL,
+            total_amount=Decimal("1000000"),
+        )
+
+        result = BenchmarkCalculator.calculate(self.business, year=2026, month=8)
+
+        self.assertEqual(result.total_revenue, 9_500_000)
+        self.assertEqual(result.total_expense, 0)
+        self.assertEqual(result.raw_material_ratio, 0.0)

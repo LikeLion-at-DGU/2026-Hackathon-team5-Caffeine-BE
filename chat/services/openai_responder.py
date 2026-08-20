@@ -10,6 +10,7 @@ from tax.services.periods import month_range
 from transactions.services.querysets import effective_transactions
 
 from .responder import ChatReply, RuleBasedChatResponder
+from .periods import extract_requested_periods
 
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ class OpenAIChatResponder:
                 business=business,
                 year=year,
                 month=month,
+                message=message,
             )
             history, is_first_turn = self._recent_history(
                 business=business,
@@ -128,6 +130,7 @@ class OpenAIChatResponder:
 질문 처리 원칙:
 1. 메뉴 아이디어, 홍보, 고객 응대, 매장 운영, 일상 대화 등 일반 질문은 모델의 일반 지식을 활용해 자유롭게 도와주세요. 카페 서비스 범위 밖이라는 이유로 거절하지 마세요.
 2. 사용자의 매출, 매입, 거래, 공제, 인건비, 급여, 손익 등 이 사업장 고유의 사실과 숫자는 오직 SERVICE_CONTEXT JSON에 있는 값만 사용하세요. 없으면 확인할 자료가 없다고 분명히 말하고 숫자를 추측하지 마세요.
+2-1. PERIOD_COMPARISON이 있으면 요청된 모든 연월의 값을 빠짐없이 비교하고, 금액 차이와 증감률을 계산해 표나 짧은 목록으로 명확히 보여주세요.
 3. 세법, 공제 요건, 신고기한, 법령 해석처럼 최신성이 필요한 세무 질문은 반드시 web_search를 사용하세요. 검색 결과 중 법령정보센터·국세청·기획재정부의 공식 자료만 근거로 삼으세요.
 4. 세무 답변은 '한줄 결론 → 적용 조건 → 법령·공식 근거 → 확인할 점' 순서로 쉽게 설명하세요. 가능하면 법령명·조문 또는 해석 문서명을 밝히고 출처 인용을 유지하되, 전체를 한국어 약 1,000자 안팎으로 간결하게 마무리하세요.
 5. 공식 해석도 개별 사실관계에 따라 달라질 수 있음을 알리고, 최종 신고 판단이 필요한 사안은 세무 전문가 또는 관할 세무서 확인을 권하세요. 겁을 주는 상투적 면책문구는 반복하지 마세요.
@@ -135,7 +138,7 @@ class OpenAIChatResponder:
 7. 주민등록번호, 계좌번호, 인증정보, 카드번호 등 민감정보를 요청하거나 답변에 노출하지 마세요.
 """.strip()
 
-    def _build_service_context(self, *, business, year, month):
+    def _build_service_context(self, *, business, year, month, message):
         sections = {}
         builders = {
             "transactions": self.fallback._transaction_reply,
@@ -174,7 +177,42 @@ class OpenAIChatResponder:
             }
             for item in transactions
         ]
+        periods = extract_requested_periods(
+            message,
+            default_year=year,
+            default_month=month,
+        )
+        if len(periods) > 1:
+            sections["PERIOD_COMPARISON"] = self._build_period_comparison(
+                business=business,
+                periods=periods,
+            )
         return sections
+
+    def _build_period_comparison(self, *, business, periods):
+        """여러 달 질문에 필요한 핵심 정량값만 월별로 묶어 토큰을 절약한다."""
+        builders = {
+            "transactions": self.fallback._transaction_reply,
+            "analytics": self.fallback._analytics_reply,
+            "payroll": self.fallback._withholding_tax_reply,
+            "vat": self.fallback._vat_reply,
+        }
+        comparison = []
+        for year, month in periods:
+            facts = {"year_month": f"{year:04d}-{month:02d}"}
+            for name, builder in builders.items():
+                try:
+                    reply = builder(business=business, year=year, month=month)
+                    facts[name] = self._json_safe(reply.metadata)
+                except Exception as exc:
+                    logger.info(
+                        "Chat period comparison section %s unavailable: %s",
+                        name,
+                        exc.__class__.__name__,
+                    )
+                    facts[name] = {"available": False}
+            comparison.append(facts)
+        return comparison
 
     @staticmethod
     def _recent_history(*, business, current_message):
@@ -207,6 +245,10 @@ class OpenAIChatResponder:
         context = {
             "USER_QUESTION": message,
             "SELECTED_PERIOD": f"{year:04d}-{month:02d}",
+            "SELECTED_PERIODS": [
+                item["year_month"]
+                for item in service_context.get("PERIOD_COMPARISON", [])
+            ] or [f"{year:04d}-{month:02d}"],
             "BUSINESS": {
                 "id": business.id,
                 "name": business.business_name,

@@ -13,6 +13,7 @@ from tax.models import DeductionReview
 from chat.models import ChatMessage
 from chat.services.chat_service import ChatService
 from chat.services.responder import ChatReply, RuleBasedChatResponder
+from payroll.models import Employee, Payment
 
 
 class ChatServiceTests(TestCase):
@@ -124,6 +125,45 @@ class ChatServiceTests(TestCase):
         self.assertEqual(reply.metadata["intent"], "WITHHOLDING_TAX")
         self.assertIn("10일", reply.content)
         self.assertIn("소득세법", reply.content)
+
+    def test_multi_month_payroll_comparison_works_without_openai(self):
+        employee = Employee.objects.create(
+            business=self.business,
+            name="비교직원",
+            employment_type="PART_TIME",
+            hourly_wage=10_000,
+            is_long_term_contract=True,
+        )
+        Payment.objects.create(
+            employee=employee,
+            year=2026,
+            month=6,
+            work_hours=60,
+            gross_pay=600_000,
+            withholding_tax=0,
+        )
+        Payment.objects.create(
+            employee=employee,
+            year=2026,
+            month=7,
+            work_hours=80,
+            gross_pay=800_000,
+            withholding_tax=0,
+        )
+
+        reply = RuleBasedChatResponder().reply(
+            business=self.business,
+            message="2026년 6월과 7월 인건비를 비교해줘",
+            year=2026,
+            month=6,
+        )
+
+        self.assertEqual(reply.metadata["intent"], "PERIOD_COMPARISON")
+        self.assertEqual(
+            [item["year_month"] for item in reply.metadata["periods"]],
+            ["2026-06", "2026-07"],
+        )
+        self.assertIn("+200,000원", reply.content)
 
     def test_tax_saving_question_returns_distinct_guide(self):
         reply = RuleBasedChatResponder().reply(

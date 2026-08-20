@@ -1,6 +1,4 @@
 import math
-import re
-
 from django.utils import timezone
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -16,26 +14,16 @@ from .serializers import (
     ChatMessageSerializer,
 )
 from .services.chat_service import ChatService
-
-
-_YEAR_MONTH_PATTERN = re.compile(
-    r"(?:(?P<year>20\d{2})\s*년\s*)?(?P<month>1[0-2]|0?[1-9])\s*월"
-)
+from .services.periods import extract_requested_periods
 
 
 def _requested_period(message, *, default_year, default_month):
     """질문에 적힌 연월을 우선 사용하고, 없으면 현재 연월을 반환한다."""
-    match = _YEAR_MONTH_PATTERN.search(message)
-    if match:
-        return int(match.group("year") or default_year), int(match.group("month"))
-
-    normalized = message.replace(" ", "")
-    if "지난달" in normalized or "저번달" in normalized:
-        if default_month == 1:
-            return default_year - 1, 12
-        return default_year, default_month - 1
-
-    return default_year, default_month
+    return extract_requested_periods(
+        message,
+        default_year=default_year,
+        default_month=default_month,
+    )[0]
 
 
 def _check_business_owner(request, business):

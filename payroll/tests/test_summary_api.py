@@ -43,6 +43,20 @@ class PayrollSummaryAPITests(TestCase):
         response = self.client.get(self.url, {"year": 2026, "month": 8})
         self.assertEqual(response.data["data"]["withholding_tax"], 48_334)
 
+    def test_summary_exposes_gross_deductions_and_net_pay_separately(self):
+        response = self.client.get(self.url, {"year": 2026, "month": 8})
+        data = response.data["data"]
+
+        self.assertEqual(data["total_gross_pay"], 1_455_120 + 445_824 + 1_200_000)
+        self.assertEqual(
+            data["deductions_total"],
+            data["withholding_tax"] + data["employee_insurance_total"],
+        )
+        self.assertEqual(
+            data["net_pay_total"],
+            data["total_gross_pay"] - data["deductions_total"],
+        )
+
     def test_summary_labor_cost_includes_employer_insurance(self):
         response = self.client.get(self.url, {"year": 2026, "month": 8})
         data = response.data["data"]

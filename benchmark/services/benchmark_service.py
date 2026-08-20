@@ -15,23 +15,34 @@ class BenchmarkService:
         # 1. 정량 지표 및 상권 비교 계산
         calc = BenchmarkCalculator.calculate(business=business, year=year, month=month)
 
-        # 2. AI 진단 캐시 조회 또는 신규 생성
+        # 2. AI 진단 캐시 조회. 장부/급여가 바뀌었으면 같은 연월 캐시라도
+        # 폐기하고 다시 생성해 정량 지표와 AI 문장이 서로 어긋나지 않게 한다.
+        fingerprint = cls._calculation_fingerprint(calc)
         history = AIDiagnosisHistory.objects.filter(
             business=business,
             year_month=year_month_str,
         ).first()
 
-        if not history:
+        cached_fingerprint = (
+            (history.raw_response or {}).get("_calculation_fingerprint")
+            if history and isinstance(history.raw_response, dict)
+            else None
+        )
+        if not history or cached_fingerprint != fingerprint:
             ai_res = AIDiagnostician().diagnose(calc)
-            history = AIDiagnosisHistory.objects.create(
+            raw_response = dict(ai_res.raw_response or {})
+            raw_response["_calculation_fingerprint"] = fingerprint
+            history, _ = AIDiagnosisHistory.objects.update_or_create(
                 business=business,
                 year_month=year_month_str,
-                score=ai_res.score,
-                grade_label=ai_res.grade_label,
-                prescriptions=ai_res.prescriptions,
-                summary_points=ai_res.summary_points,
-                is_fallback=ai_res.is_fallback,
-                raw_response=ai_res.raw_response,
+                defaults={
+                    "score": ai_res.score,
+                    "grade_label": ai_res.grade_label,
+                    "prescriptions": ai_res.prescriptions,
+                    "summary_points": ai_res.summary_points,
+                    "is_fallback": ai_res.is_fallback,
+                    "raw_response": raw_response,
+                },
             )
 
         # 3. 피그마 화면 100% 매칭 응답 구조 조립
@@ -72,6 +83,8 @@ class BenchmarkService:
         # 2. AI 진단 강제 재실행
         ai_res = AIDiagnostician().diagnose(calc)
 
+        raw_response = dict(ai_res.raw_response or {})
+        raw_response["_calculation_fingerprint"] = cls._calculation_fingerprint(calc)
         history, _ = AIDiagnosisHistory.objects.update_or_create(
             business=business,
             year_month=year_month_str,
@@ -81,7 +94,7 @@ class BenchmarkService:
                 "prescriptions": ai_res.prescriptions,
                 "summary_points": ai_res.summary_points,
                 "is_fallback": ai_res.is_fallback,
-                "raw_response": ai_res.raw_response,
+                "raw_response": raw_response,
             },
         )
 
@@ -95,4 +108,22 @@ class BenchmarkService:
             },
             "ai_prescriptions": history.prescriptions,
             "is_fallback": history.is_fallback,
+        }
+
+    @staticmethod
+    def _calculation_fingerprint(calc) -> dict:
+        """AI 문장을 무효화해야 하는 핵심 정량값의 직렬화 가능한 스냅샷."""
+        return {
+            "total_revenue": calc.total_revenue,
+            "total_expense": calc.total_expense,
+            "cost_status": calc.cost_status,
+            "raw_material_ratio": calc.raw_material_ratio,
+            "category_comparison": [
+                {
+                    "category": item.category,
+                    "my_ratio": item.my_ratio,
+                    "diff_ratio": item.diff_ratio,
+                }
+                for item in calc.category_comparison
+            ],
         }

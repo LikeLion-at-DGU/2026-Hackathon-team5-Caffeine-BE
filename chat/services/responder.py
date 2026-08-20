@@ -11,6 +11,7 @@ from tax.services.periods import month_range
 from tax.services.vat_service import UnsupportedTaxType, VatForecastService
 from transactions.models import Transaction
 from transactions.services.querysets import effective_purchase_transactions, effective_transactions
+from .periods import extract_requested_periods
 
 ZERO = Decimal("0.00")
 
@@ -40,6 +41,18 @@ class RuleBasedChatResponder:
 
     def reply(self, *, business, message, year, month):
         normalized = message.replace(" ", "")
+        periods = extract_requested_periods(
+            message,
+            default_year=year,
+            default_month=month,
+        )
+
+        # OpenAI 장애/키 미설정 상황에서도 월간 비교 질문은 실제 DB 값으로 답한다.
+        if len(periods) > 1 and any(
+            keyword in normalized
+            for keyword in ("비교", "인건비", "급여", "매출", "지출", "비용", "손익")
+        ):
+            return self._period_comparison_reply(business=business, periods=periods)
 
         # 1. 원천세 및 급여 납부일 질문
         if any(keyword in normalized for keyword in self.WITHHOLDING_TAX_KEYWORDS):
@@ -78,11 +91,60 @@ class RuleBasedChatResponder:
             metadata={"intent": "HELP", "sources": []},
         )
 
+    @staticmethod
+    def _period_comparison_reply(*, business, periods):
+        rows = []
+        for year, month in periods:
+            analytics = get_monthly_tax_summary(business.id, year, month)
+            payroll = get_payroll_summary(business.id, year, month)
+            rows.append(
+                {
+                    "year_month": f"{year:04d}-{month:02d}",
+                    "total_sales": analytics["total_sales"],
+                    "total_expense": analytics["total_expense"],
+                    "net_profit": analytics["net_profit"],
+                    "total_gross_pay": payroll["total_gross_pay"],
+                    "withholding_tax": payroll["withholding_tax"],
+                    "employee_insurance_total": payroll["employee_insurance_total"],
+                    "deductions_total": payroll["deductions_total"],
+                    "net_pay_total": payroll["net_pay_total"],
+                }
+            )
+
+        lines = ["📊 **월별 경영·인건비 비교**"]
+        for row in rows:
+            lines.append(
+                f"• **{row['year_month']}**: 매출 {_won(row['total_sales'])}, "
+                f"지출 {_won(row['total_expense'])}, 세전 급여 {_won(row['total_gross_pay'])}, "
+                f"총 공제액 {_won(row['deductions_total'])}, 실수령액 {_won(row['net_pay_total'])}"
+            )
+
+        if len(rows) == 2:
+            before, after = rows
+            gross_diff = after["total_gross_pay"] - before["total_gross_pay"]
+            expense_diff = after["total_expense"] - before["total_expense"]
+            lines.append(
+                f"\n두 번째 달은 첫 번째 달보다 세전 급여가 {gross_diff:+,}원, "
+                f"총 지출이 {expense_diff:+,}원 변했어요."
+            )
+
+        return ChatReply(
+            content="\n".join(lines),
+            metadata={
+                "intent": "PERIOD_COMPARISON",
+                "periods": rows,
+                "sources": ["ANALYTICS", "PAYROLL"],
+            },
+        )
+
     def _withholding_tax_reply(self, *, business, year, month):
         """원천세 납부 기한 및 인건비 원천징수 현황 안내."""
         payroll = get_payroll_summary(business.id, year, month)
         withholding_tax = payroll.get("withholding_tax", 0)
-        total_labor = payroll.get("total_labor_cost", 0)
+        total_gross_pay = payroll.get("total_gross_pay", 0)
+        employee_insurance = payroll.get("employee_insurance_total", 0)
+        deductions_total = payroll.get("deductions_total", 0)
+        net_pay_total = payroll.get("net_pay_total", 0)
         employee_count = payroll.get("employee_count", 0)
 
         # 다음 달 10일 계산
@@ -96,8 +158,11 @@ class RuleBasedChatResponder:
             f"  *(반기별 납부 승인 사업장은 상반기분 7월 10일, 하반기분 익년 1월 10일까지)*\n\n"
             f"• **{business.business_name} {year}년 {month}월 인건비 현황**:\n"
             f"  - 등록 근로자: 총 {employee_count}명 (정직원, 단시간, 3.3% 프리랜서)\n"
-            f"  - 지급 총액: {_won(total_labor)}\n"
-            f"  - **납부할 원천징수 세액 합계: {_won(withholding_tax)}**\n\n"
+            f"  - 세전 급여 합계: {_won(total_gross_pay)}\n"
+            f"  - 원천세(소득세+지방소득세): {_won(withholding_tax)}\n"
+            f"  - 근로자 부담 보험료: {_won(employee_insurance)}\n"
+            f"  - 총 공제액: {_won(deductions_total)}\n"
+            f"  - **실수령액 합계: {_won(net_pay_total)}**\n\n"
             f"💡 **근거 법령**: 소득세법 제127조(원천징수의무) 및 제128조(원천징수세액의 납부기한)"
         )
         return ChatReply(
@@ -107,8 +172,12 @@ class RuleBasedChatResponder:
                 "year_month": f"{year:04d}-{month:02d}",
                 "due_date": due_date_str,
                 "employee_count": employee_count,
-                "total_labor_cost": total_labor,
+                "total_gross_pay": total_gross_pay,
+                "total_labor_cost": payroll.get("total_labor_cost", 0),
                 "withholding_tax": withholding_tax,
+                "employee_insurance_total": employee_insurance,
+                "deductions_total": deductions_total,
+                "net_pay_total": net_pay_total,
                 "sources": ["PAYROLL", "TAX_LAW"],
             },
         )

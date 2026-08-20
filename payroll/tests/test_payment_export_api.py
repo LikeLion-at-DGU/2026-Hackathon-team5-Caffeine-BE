@@ -35,6 +35,21 @@ class PaymentExportAPITests(TestCase):
             gross_pay=816_000,
             withholding_tax=0,
         )
+        uninsured_part_timer = Employee.objects.create(
+            business=self.business,
+            name="이단기",
+            employment_type="PART_TIME",
+            hourly_wage=10200,
+            is_long_term_contract=False,
+        )
+        Payment.objects.create(
+            employee=uninsured_part_timer,
+            year=2026,
+            month=8,
+            work_hours=80,
+            gross_pay=816_000,
+            withholding_tax=0,
+        )
 
     def test_export_pdf_returns_pdf_file(self):
         response = self.client.post(self.url, {"year": 2026, "month": 8, "format": "pdf"}, format="json")
@@ -74,6 +89,15 @@ class PaymentExportAPITests(TestCase):
         self.assertEqual(
             sheet.cell(row=part_time_row, column=headers["고용보험"]).value,
             round(816_000 * 0.009),
+        )
+        uninsured_row = rows["이단기"]
+        self.assertEqual(
+            sheet.cell(row=uninsured_row, column=headers["고용보험"]).value,
+            0,
+        )
+        self.assertGreater(
+            sheet.cell(row=part_time_row, column=headers["공제액 합계"]).value,
+            sheet.cell(row=uninsured_row, column=headers["공제액 합계"]).value,
         )
 
     def test_export_invalid_format_returns_400(self):

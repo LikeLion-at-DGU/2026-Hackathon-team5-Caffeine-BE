@@ -114,6 +114,46 @@ class PaymentListAPITests(TestCase):
         self.assertEqual(len(response.data["data"]), 1)
         self.assertEqual(response.data["data"][0]["work_hours"], "80.0")
 
+    def test_part_time_insurance_status_changes_deductions_not_withholding_tax(self):
+        insured = Employee.objects.create(
+            business=self.business,
+            name="고용보험 적용",
+            employment_type="PART_TIME",
+            hourly_wage=10_320,
+            is_long_term_contract=True,
+        )
+        uninsured = Employee.objects.create(
+            business=self.business,
+            name="고용보험 미적용",
+            employment_type="PART_TIME",
+            hourly_wage=10_320,
+            is_long_term_contract=False,
+        )
+        for employee in (insured, uninsured):
+            Payment.objects.create(
+                employee=employee,
+                year=2026,
+                month=8,
+                work_hours=141,
+                gross_pay=1_455_120,
+                withholding_tax=8_734,
+            )
+
+        response = self.client.get(
+            f"/api/businesses/{self.business.id}/payroll/payments/",
+            {"year": 2026, "month": 8},
+        )
+        rows = {row["employee_name"]: row for row in response.data["data"]}
+        insured_row = rows["고용보험 적용"]
+        uninsured_row = rows["고용보험 미적용"]
+
+        # 같은 고용형태/세전급여이면 원천세는 같고, 고용보험과 실수령액만 달라진다.
+        self.assertEqual(insured_row["withholding_tax"], uninsured_row["withholding_tax"])
+        self.assertEqual(insured_row["employment_insurance"], round(1_455_120 * 0.009))
+        self.assertEqual(uninsured_row["employment_insurance"], 0)
+        self.assertGreater(insured_row["deductions_total"], uninsured_row["deductions_total"])
+        self.assertLess(insured_row["net_pay"], uninsured_row["net_pay"])
+
 
 class PaymentUpdateAPITests(TestCase):
     def setUp(self):
