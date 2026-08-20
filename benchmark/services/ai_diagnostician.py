@@ -28,8 +28,19 @@ class RuleBasedDiagnostician:
 
     @classmethod
     def diagnose(cls, calc: BenchmarkCalculationResult) -> AIDiagnosisResult:
-        score = 86
-        grade_label = "양호 — 상위 18% 매장"
+        diff_pct = calc.revenue_diff_pct
+        if diff_pct > 20:
+            score = 95
+            grade_label = "최우수 — 상위 5% 매장"
+        elif diff_pct > 5:
+            score = 86
+            grade_label = "양호 — 상위 20% 매장"
+        elif diff_pct > -5:
+            score = 75
+            grade_label = "보통 — 평균 수준 매장"
+        else:
+            score = 65
+            grade_label = "주의 — 하위 30% 매장"
 
         # 1. 실제 매장의 8월 거래 내역 분석
         year, month = map(int, calc.year_month.split("-"))
@@ -45,54 +56,54 @@ class RuleBasedDiagnostician:
             category=Transaction.Category.RAW_MATERIAL,
             vat_amount=0,
         ).order_by("-total_amount").first()
-        milk_merchant = deemed_tx.merchant_name if deemed_tx else "우유 유제품 대리점"
-        milk_amount = int(deemed_tx.total_amount) if deemed_tx else 920000
+        milk_merchant = deemed_tx.merchant_name if deemed_tx else "식자재 거래처"
+        milk_amount = int(deemed_tx.total_amount) if deemed_tx else 0
         deemed_vat_saving = int(milk_amount * Decimal(9) / Decimal(109))
 
         # (2) 개인 지출(불공제) 탐색
         personal_txs = purchases.filter(
             expense_purpose=Transaction.ExpensePurpose.PERSONAL
         )
-        personal_count = personal_txs.count() or 4
-        personal_sum = sum(int(t.total_amount) for t in personal_txs) or 105100
-        personal_names = "·".join([t.merchant_name.split()[0] for t in personal_txs[:3]]) if personal_txs.exists() else "편의점·유튜브·무신사"
+        personal_count = personal_txs.count()
+        personal_sum = sum(int(t.total_amount) for t in personal_txs)
+        personal_names = "·".join([t.merchant_name.split()[0] for t in personal_txs[:3]]) if personal_txs.exists() else "개인 지출"
 
         # (3) 포장재/소모품 탐색
         supplies_tx = purchases.filter(
             category=Transaction.Category.SUPPLIES
         ).first()
-        supplies_merchant = supplies_tx.merchant_name if supplies_tx else "팩플러스 패키징"
-        supplies_amount = int(supplies_tx.total_amount) if supplies_tx else 145000
+        supplies_merchant = supplies_tx.merchant_name if supplies_tx else "소모품 거래처"
+        supplies_amount = int(supplies_tx.total_amount) if supplies_tx else 0
 
         # (4) 인건비 비중
         labor_item = next((item for item in calc.category_comparison if item.category == "PAYROLL"), None)
-        labor_ratio = labor_item.my_ratio if labor_item else 22.4
-        labor_bm = labor_item.benchmark_ratio if labor_item else 24.8
+        labor_ratio = labor_item.my_ratio if labor_item else 0.0
+        labor_bm = labor_item.benchmark_ratio if labor_item else 0.0
 
         # 2. 실제 데이터 100% 매칭 3대 실전 처방
         prescriptions = [
             {
                 "id": 1,
                 "type": "COST_REDUCTION",
-                "title": f"8월 {supplies_merchant}({supplies_amount:,}원) 등 포장재·소모품비 구매 시 테이크아웃 컵·홀더를 낱개 구매하는 대신 분기 단위 박스 대량 발주 또는 카페 전용 B2B 도매몰로 전환 시 월 약 28만 원(연 336만 원)의 고정비를 즉시 절감할 수 있습니다.",
+                "title": f"{month}월 {supplies_merchant}({supplies_amount:,}원) 등 포장재·소모품비 구매 시 테이크아웃 컵·홀더를 낱개 구매하는 대신 분기 단위 박스 대량 발주 또는 B2B 도매몰로 전환 시 고정비를 즉시 절감할 수 있습니다." if supplies_amount > 0 else "포장재·소모품비 구매 시 낱개 구매 대신 분기 단위 대량 발주 또는 전용 B2B 몰 전환으로 고정비를 즉시 절감하세요.",
             },
             {
                 "id": 2,
                 "type": "REVENUE_BOOST",
-                "title": f"현재 인건비율({labor_ratio:.1f}%)을 고려할 때, 알바생이 상주하는 오후 14~17시 유휴 시간대에 마진율이 높은 고단가 디저트(바스크 치즈케이크·크로플) 페어링 세트를 집중 판매하여, 시간당 객단가를 4,200원 -> 6,800원으로 끌어올려 알바비 효율을 극대화하세요.",
+                "title": f"현재 인건비율({labor_ratio:.1f}%)을 고려할 때, 오후 유휴 시간대에 마진율이 높은 고단가 세트를 집중 판매하여 객단가를 끌어올려 알바비 효율을 극대화하세요.",
             },
             {
                 "id": 3,
                 "type": "TAX_SAVING",
-                "title": f"8월 {milk_merchant} 대량 매입({milk_amount:,}원)에 대해 부가가치세법 제42조에 따른 음식점업 의제매입세액 공제(공제율 9/109)를 적용하여 이번 부가세 신고 시 약 {deemed_vat_saving:,}원을 현금 공제/환급받게 됩니다. 계산서 발행 여부를 거래처에 꼭 재확인하세요.",
+                "title": f"{month}월 {milk_merchant} 매입({milk_amount:,}원)에 대해 부가가치세법 제42조(의제매입세액 공제)를 적용하여 이번 부가세 신고 시 공제/환급을 챙기세요." if milk_amount > 0 else "면세 식자재 매입 시 부가가치세법 제42조에 따른 음식점업 의제매입세액 공제(공제율 9/109)를 위해 계산서를 꼭 발급받으세요.",
             },
         ]
 
         # 3. 3대 핵심 요약
         summary_points = [
-            f"원두·우유 등 식자재 원가율({calc.raw_material_ratio:.1f}%)은 상권 평균({calc.benchmark_raw_material_ratio:.1f}%)보다 낮아 매우 우수하며, 포장재 대량 발주 시 추가적인 비용 절감이 가능합니다.",
-            f"8월 인건비 비중({labor_ratio:.1f}%)은 상권 평균({labor_bm:.1f}%) 대비 안정적으로 관리되고 있으며, 오후 유휴 시간대 고마진 세트 판매로 매출 효율을 더욱 높일 수 있습니다.",
-            f"개인 지출 {personal_count}건({personal_names} 등 {personal_sum:,}원)을 AI가 사전 불공제 분류하여 국세청 사후검증 과소신고 가산세(10%)를 선제적으로 완벽 방어했습니다.",
+            f"식자재 원가율({calc.raw_material_ratio:.1f}%)은 상권 평균({calc.benchmark_raw_material_ratio:.1f}%)과 비교해 관리 중이며, 포장재 대량 발주 시 추가적인 비용 절감이 가능합니다.",
+            f"{month}월 인건비 비중({labor_ratio:.1f}%)은 상권 평균({labor_bm:.1f}%) 대비 관리되고 있으며, 유휴 시간대 고마진 세트 판매로 매출 효율을 높일 수 있습니다.",
+            f"개인 지출 {personal_count}건({personal_names} 등 {personal_sum:,}원)을 AI가 사전 불공제 분류하여 국세청 가산세(10%)를 선제적으로 방어했습니다." if personal_count > 0 else "개인 용도 지출을 사업용 카드에서 분리하여 가산세 리스크를 선제적으로 예방하고 있습니다.",
         ]
 
         return AIDiagnosisResult(
@@ -116,6 +127,20 @@ class AIDiagnostician:
             logger.info("OPENAI_API_KEY 미설정으로 규칙 기반 진단(Fallback)을 사용합니다.")
             return RuleBasedDiagnostician.diagnose(calc)
 
+        diff_pct = calc.revenue_diff_pct
+        if diff_pct > 20:
+            example_score = 95
+            example_grade = "최우수 — 상위 5% 매장"
+        elif diff_pct > 5:
+            example_score = 86
+            example_grade = "양호 — 상위 20% 매장"
+        elif diff_pct > -5:
+            example_score = 75
+            example_grade = "보통 — 평균 수준 매장"
+        else:
+            example_score = 65
+            example_grade = "주의 — 하위 30% 매장"
+
         prompt_input = f"""
 [내 매장 재무/세무 지표]
 - 매장명: {calc.business_name}
@@ -128,21 +153,22 @@ class AIDiagnostician:
 
 [작성 지침 - 절대 상투적이거나 뻔한 교과서 문구를 쓰지 마세요]
 1. '거래처와 신뢰를 유지하세요', '친절하게 응대하세요', '세트 할인을 해보세요' 같은 무의미하고 당연한 말은 엄격히 금지합니다.
-2. 반드시 [1] 문제 지출 항목과 구체적 절감 금액(원/월 단위), [2] 시간대별 객단가 개선 목표(4,200원->6,800원)와 고마진 메뉴 조합, [3] 부가가치세법 제42조 의제매입세액 공제율(9/109) 및 구체적 환급액(약 295,000원) 등 숫자가 포함된 실전형 원포인트 솔루션을 작성하세요.
+2. 반드시 [1] 문제 지출 항목과 구체적 절감 금액, [2] 시간대별 객단가 개선 목표와 추천 메뉴 조합, [3] 부가가치세법 제42조 의제매입세액 공제율(9/109) 등 실제 데이터를 반영한 숫자가 포함된 실전형 원포인트 솔루션을 작성하세요.
+3. 매장의 상황에 맞는 동적인 점수와 등급 라벨을 생성하세요.
 
-위 정량 데이터를 바탕으로 소상공인 카페 사장님을 위한 맞춤 진단을 아래 JSON 형식으로만 작성하세요:
+위 정량 데이터를 바탕으로 소상공인 카페 사장님을 위한 맞춤 진단을 아래 JSON 형식으로만 작성하세요 (예시 데이터는 참고용이며 실제 지표를 반영할 것):
 {{
-  "score": 86,
-  "grade_label": "양호 — 상위 18% 매장",
+  "score": {example_score},
+  "grade_label": "{example_grade}",
   "prescriptions": [
-    {{"id": 1, "type": "COST_REDUCTION", "title": "8월 팩플러스 패키징(14.5만 원) 등 포장재·소모품비 구매 시 테이크아웃 컵·홀더를 낱개 구매하는 대신 분기 단위 박스 대량 발주 또는 카페 전용 B2B 도매몰로 전환 시 월 약 28만 원(연 336만 원)의 고정비를 즉시 절감할 수 있습니다."}},
-    {{"id": 2, "type": "REVENUE_BOOST", "title": "현재 인건비율(22.4%)을 고려할 때, 알바생이 상주하는 오후 14~17시 유휴 시간대에 마진율이 높은 고단가 디저트(바스크 치즈케이크·크로플) 페어링 세트를 집중 판매하여, 시간당 객단가를 4,200원 -> 6,800원으로 끌어올려 알바비 효율을 극대화하세요."}},
-    {{"id": 3, "type": "TAX_SAVING", "title": "8월 매일유업 강서대리점 대량 매입(92만 원)에 대해 부가가치세법 제42조에 따른 음식점업 의제매입세액 공제(공제율 9/109)를 적용하여 이번 부가세 신고 시 약 75,963원을 현금 공제/환급받게 됩니다. 계산서 발행 여부를 거래처에 꼭 재확인하세요."}}
+    {{"id": 1, "type": "COST_REDUCTION", "title": "포장재 구매 시 분기 단위 박스 대량 발주 또는 카페 전용 B2B 도매몰로 전환 시 고정비를 즉시 절감할 수 있습니다."}},
+    {{"id": 2, "type": "REVENUE_BOOST", "title": "오후 14~17시 유휴 시간대에 마진율이 높은 고단가 디저트 페어링 세트를 집중 판매하여 객단가를 끌어올려 알바비 효율을 극대화하세요."}},
+    {{"id": 3, "type": "TAX_SAVING", "title": "식자재 매입 시 부가가치세법 제42조에 따른 음식점업 의제매입세액 공제(공제율 9/109)를 적용하기 위해 계산서 발행 여부를 꼭 확인하세요."}}
   ],
   "summary_points": [
-    "원두·우유 등 식자재 원가율(16.7%)은 상권 평균보다 낮아 매우 우수하며, 포장재 대량 발주 시 추가적인 비용 절감이 가능합니다.",
-    "8월 인건비 비중(22.4%)은 상권 평균 대비 안정적으로 관리되고 있으며, 오후 유휴 시간대 고마진 세트 판매로 매출 효율을 더욱 높일 수 있습니다.",
-    "개인 지출 4건(CU편의점·유튜브·무신사·블루보틀 등 105,100원)을 AI가 사전 불공제 분류하여 국세청 사후검증 과소신고 가산세(10%)를 선제적으로 완벽 방어했습니다."
+    "식자재 원가율은 상권 평균 대비 우수하며, 포장재 대량 발주 시 추가 절감이 가능합니다.",
+    "인건비 비중은 상권 평균 대비 안정적이며, 유휴 시간대 고마진 판매로 매출 효율을 높일 수 있습니다.",
+    "개인 지출 항목을 AI가 사전 불공제 분류하여 가산세를 선제적으로 방어했습니다."
   ]
 }}
 """
@@ -166,8 +192,8 @@ class AIDiagnostician:
             raw_text = response.choices[0].message.content
             parsed = json.loads(raw_text)
 
-            score = int(parsed.get("score", 86))
-            grade_label = str(parsed.get("grade_label", "양호 — 상위 18% 매장"))
+            score = int(parsed.get("score", example_score))
+            grade_label = str(parsed.get("grade_label", example_grade))
             prescriptions = parsed.get("prescriptions", [])
             summary_points = parsed.get("summary_points", [])
 
