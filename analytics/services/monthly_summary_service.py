@@ -165,9 +165,16 @@ def get_monthly_tax_summary(business_id: int, year: int, month: int) -> dict:
     if business.tax_type == "GENERAL":
         try:
             forecast = VatForecastService.calculate(business=business, year=year, month=month)
-            sales_tax = int(forecast["output_vat"]) if forecast.get("output_vat") else int(total_sales * Decimal("0.1"))
-            purchase_tax = int(forecast["deductible_input_vat"]) if forecast.get("deductible_input_vat") else 0
-            deemed_deduction = 295000 if total_sales > 0 else 0
+            # 의제매입 공제세액 (면세 원재료 우유 등의 9/109)
+            deemed_raw_mat_sum = Transaction.objects.filter(
+                business_id=business_id,
+                transaction_date__year=year,
+                transaction_date__month=month,
+                transaction_type=Transaction.TransactionType.PURCHASE,
+                category=Transaction.Category.RAW_MATERIAL,
+                vat_amount=0,
+            ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
+            deemed_deduction = int(deemed_raw_mat_sum * Decimal(9) / Decimal(109))
             vat_reserve = sales_tax - purchase_tax - deemed_deduction
             if vat_reserve < 0:
                 vat_reserve = 0
