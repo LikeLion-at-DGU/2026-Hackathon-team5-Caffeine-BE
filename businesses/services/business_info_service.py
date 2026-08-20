@@ -8,6 +8,9 @@ class BusinessInfoSyncError(Exception):
 
 
 class BusinessInfoService:
+    def __init__(self, provider=None):
+        self.provider = provider or get_codef_provider()
+    
     def sync(self, business):
         provider = get_codef_provider()
 
