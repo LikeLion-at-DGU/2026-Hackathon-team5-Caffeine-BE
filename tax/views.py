@@ -264,3 +264,25 @@ class MonthlyCloseApproveView(APIView):
             message="월 마감을 승인했습니다.",
             data=data,
         )
+
+
+class MonthlyCloseReopenView(APIView):
+    """마감된 월을 해제하여 지출 내역 분류 및 검토를 다시 진행할 수 있도록 재오픈한다."""
+
+    def post(self, request, year_month):
+        query = BusinessPeriodQuerySerializer(
+            data={"business_id": request.data.get("business_id"), "year_month": year_month}
+        )
+        if not query.is_valid():
+            return _invalid_query(query, "INVALID_YEAR_MONTH")
+        params = query.validated_data
+        year, month = parse_year_month(year_month)
+        MonthlyClose.objects.filter(
+            business=params["business"], year=year, month=month
+        ).delete()
+        return success_response(
+            code="MONTHLY_CLOSE_REOPENED",
+            message="월 마감을 해제(재오픈)했습니다. 지출 내역을 다시 검토할 수 있습니다.",
+            data={"business_id": params["business"].id, "year_month": year_month, "is_closed": False},
+        )
+
