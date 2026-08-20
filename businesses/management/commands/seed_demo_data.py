@@ -15,7 +15,7 @@ from transactions.services.sync_service import TransactionSyncService
 
 
 class Command(BaseCommand):
-    help = "CODEF Mock부터 앵무101 김포마산점의 3~8월 6개월치 거래·세금·급여·리포트 데모 흐름을 생성합니다."
+    help = "CODEF Mock부터 진호다방의 3~8월 6개월치 거래·세금·급여·리포트 데모 흐름을 생성합니다."
 
     def add_arguments(self, parser):
         parser.add_argument("--year-month", default="2026-08")
@@ -27,28 +27,29 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         year, month = parse_year_month(options["year_month"])
-        business_number = "1234567890"
+        business_number = "2148678901"
 
         if options["reset"]:
             Business.objects.filter(id=1).delete()
             Business.objects.filter(business_number=business_number, is_demo=True).delete()
+            Business.objects.filter(business_number="1234567890").delete()
 
         business, _ = Business.objects.update_or_create(
             id=1,
             defaults={
                 "business_number": business_number,
-                "business_name": "앵무101 김포마산점",
-                "representative_name": "유지은",
-                "birth_date": "1988-05-12",
-                "phone_number": "010-1234-5678",
+                "business_name": "진호다방",
+                "representative_name": "장진호",
+                "birth_date": "2003-05-24",
+                "phone_number": "010-2458-1046",
                 "industry_code": "552303",
                 "business_type": "음식점업",
-                "business_item": "커피전문점 및 디저트",
+                "business_item": "커피전문점 및 음료",
                 "business_status": "ACTIVE",
                 "tax_type": "GENERAL",
                 "tax_type_code": "1",
                 "is_demo": True,
-                "tax_accountant_email": "tax-demo@angmu101.com",
+                "tax_accountant_email": "tax@jinhodabang.com",
             },
         )
 
@@ -78,8 +79,8 @@ class Command(BaseCommand):
             ],
         )
 
-        # 개인 지출 분류 및 공제 확정 처리 (실수로 긁은 편의점/넷플릭스/올리브영/스타벅스 등)
-        personal_keywords = ("넷플릭스", "올리브영", "개인", "GS25", "스타벅스", "데일리리빙")
+        # 개인 지출 분류 및 공제 확정 처리 (CU 편의점/유튜브 프리미엄/무신사/블루보틀 등)
+        personal_keywords = ("유튜브", "무신사", "블루보틀", "CU", "편의점", "개인")
         purchases = Transaction.objects.filter(
             business=business,
             transaction_type=Transaction.TransactionType.PURCHASE,
@@ -105,11 +106,11 @@ class Command(BaseCommand):
                 ),
             )
 
-        # 직원 3명 등록
+        # 직원 3명 등록 (이도현, 박서연, 최우식)
         employee_specs = [
-            ("김민지", "FULL_TIME", 10320, 141),
-            ("황사라", "PART_TIME", 12000, 80),
-            ("박프리", "FREELANCER", 15000, 60),
+            ("이도현", "FULL_TIME", 11500, 160),
+            ("박서연", "PART_TIME", 10200, 80),
+            ("최우식", "FREELANCER", 15000, 40),
         ]
         for name, employment_type, hourly_wage, work_hours in employee_specs:
             Employee.objects.update_or_create(
@@ -140,12 +141,13 @@ class Command(BaseCommand):
 
         report = generate_report(business.id, options["year_month"])
 
-        self.stdout.write(self.style.SUCCESS("앵무101 김포마산점 6개월(3~8월) 데모 데이터 생성 완료"))
+        self.stdout.write(self.style.SUCCESS("진호다방 6개월(3~8월) 신규 데모 데이터 생성 완료"))
         self.stdout.write(f"business_id={business.id}")
         self.stdout.write(f"business_name={business.business_name}")
+        self.stdout.write(f"representative_name={business.representative_name}")
+        self.stdout.write(f"birth_date={business.birth_date}")
+        self.stdout.write(f"phone_number={business.phone_number}")
         self.stdout.write(f"year_month={options['year_month']}")
         self.stdout.write(f"transactions={Transaction.objects.filter(business=business).count()}")
         self.stdout.write(f"sales_summaries={MonthlySalesSummary.objects.filter(business=business).count()}")
         self.stdout.write(f"employees={Employee.objects.filter(business=business).count()}")
-        self.stdout.write(f"report_id={report.id}")
-        self.stdout.write(f"sync_result={sync_result['outcome']}")

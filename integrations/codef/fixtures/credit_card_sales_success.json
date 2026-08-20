@@ -3,67 +3,41 @@
     "code": "CF-00000",
     "extraMessage": "",
     "message": "성공",
-    "transactionId": "6a856fba10ecdc3849bb4109"
+    "transactionId": "5f19e7a03bc214d89a72e812"
   },
   "data": {
+    "resCompanyIdentityNo": "2148678901",
     "resSalesHistoryList": [
       {
         "resYearMonth": "202603",
-        "resCount": "614",
-        "resTotalAmount": "8724500",
-        "resPaymentAmt": "8724500",
-        "resPaymentAmt1": "0",
-        "resCashBack": "0"
+        "resCount": "563",
+        "resTotalAmount": "9428500"
       },
       {
         "resYearMonth": "202604",
-        "resCount": "587",
-        "resTotalAmount": "8142300",
-        "resPaymentAmt": "8142300",
-        "resPaymentAmt1": "0",
-        "resCashBack": "0"
+        "resCount": "624",
+        "resTotalAmount": "10512000"
       },
       {
         "resYearMonth": "202605",
-        "resCount": "698",
-        "resTotalAmount": "9481200",
-        "resPaymentAmt": "9481200",
-        "resPaymentAmt1": "0",
-        "resCashBack": "0"
+        "resCount": "738",
+        "resTotalAmount": "12485200"
       },
       {
         "resYearMonth": "202606",
-        "resCount": "713",
-        "resTotalAmount": "9895400",
-        "resPaymentAmt": "9895400",
-        "resPaymentAmt1": "0",
-        "resCashBack": "0"
+        "resCount": "712",
+        "resTotalAmount": "11940800"
       },
       {
         "resYearMonth": "202607",
-        "resCount": "729",
-        "resTotalAmount": "10128700",
-        "resPaymentAmt": "10128700",
-        "resPaymentAmt1": "0",
-        "resCashBack": "0"
+        "resCount": "825",
+        "resTotalAmount": "13874500"
       },
       {
         "resYearMonth": "202608",
-        "resCount": "764",
-        "resTotalAmount": "10746800",
-        "resPaymentAmt": "10746800",
-        "resPaymentAmt1": "0",
-        "resCashBack": "0"
+        "resCount": "867",
+        "resTotalAmount": "14562300"
       }
-    ],
-    "resTotalList": [
-      {
-        "resQuarter": "2026-H1",
-        "resType": "신용카드",
-        "resCount": "4105",
-        "resTotalAmount": "57118900"
-      }
-    ],
-    "resSalesHistoryList1": []
+    ]
   }
 }

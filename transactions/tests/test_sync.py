@@ -39,11 +39,11 @@ class TransactionSyncServiceTests(TestCase):
     def test_sync_creates_only_individual_transaction_sources(self):
         result = self.sync_all()
 
-        self.assertEqual(result["created_count"], 30)
-        self.assertEqual(Transaction.objects.count(), 30)
+        self.assertEqual(result["created_count"], 19)
+        self.assertEqual(Transaction.objects.count(), 19)
         self.assertEqual(
             Transaction.objects.filter(source_type=Transaction.SourceType.CARD_PURCHASE).count(),
-            13,
+            11,
         )
         self.assertFalse(
             Transaction.objects.filter(external_id__contains="credit-card-sales").exists()
@@ -54,8 +54,8 @@ class TransactionSyncServiceTests(TestCase):
         second = self.sync_all()
 
         self.assertEqual(second["created_count"], 0)
-        self.assertEqual(second["updated_count"], 30)
-        self.assertEqual(Transaction.objects.count(), 30)
+        self.assertEqual(second["updated_count"], 19)
+        self.assertEqual(Transaction.objects.count(), 19)
 
     def test_user_category_survives_resync(self):
         self.sync_all()
@@ -92,7 +92,7 @@ class TransactionSyncServiceTests(TestCase):
         )
 
         self.assertEqual(result["created_count"], 3)
-        self.assertEqual(result["skipped_outside_period_count"], 23)
+        self.assertEqual(result["skipped_outside_period_count"], 18)
 
     def test_business_number_mismatch_is_rejected(self):
         other = Business.objects.create(
@@ -123,7 +123,7 @@ class TransactionSyncServiceTests(TestCase):
         self.assertEqual(Transaction.objects.count(), 0)
         summary = MonthlySalesSummary.objects.get()
         self.assertEqual(summary.year_month, "2026-08")
-        self.assertEqual(summary.transaction_count, 764)
+        self.assertEqual(summary.transaction_count, 867)
 
     def test_credit_card_sales_summary_sync_is_idempotent(self):
         sources = [MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY]
@@ -137,6 +137,7 @@ class TransactionSyncServiceTests(TestCase):
         )
 
         self.assertEqual(second["created_count"], 0)
+        self.assertEqual(second["updated_count"], 1)
         self.assertEqual(second["sales_summary_updated_count"], 1)
         self.assertEqual(MonthlySalesSummary.objects.count(), 1)
 
@@ -167,7 +168,7 @@ class TransactionSyncServiceTests(TestCase):
                 [Transaction.SourceType.CARD_PURCHASE],
             )
 
-        self.assertEqual(result["new_duplicate_candidate_count"], 13)
+        self.assertEqual(result["new_duplicate_candidate_count"], 11)
         self.assertEqual(result["duplicate_candidate_total_count"], 0)
 
     def test_real_summary_access_requires_this_business_hometax_connection(self):
@@ -216,7 +217,7 @@ class TransactionSyncApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["code"], "TRANSACTION_SYNC_SUCCESS")
-        self.assertEqual(response.data["data"]["created_count"], 30)
+        self.assertEqual(response.data["data"]["created_count"], 19)
 
     def test_unavailable_cash_receipt_purchase_is_rejected(self):
         response = self.client.post(
