@@ -141,3 +141,35 @@ class BenchmarkAiDiagnosisRefreshView(APIView):
             message="AI 경영 진단이 새롭게 갱신되었습니다.",
             data=result,
         )
+
+
+class BenchmarkDeepDiagnosisView(APIView):
+    """8월 경영 종합 진단 리포트 (모달 팝업 전용 심층 진단 데이터)."""
+
+    def get(self, request, business_id):
+        business, err = _get_business_or_error(business_id)
+        if err:
+            return err
+
+        serializer = BenchmarkQuerySerializer(data=request.query_params)
+        if not serializer.is_valid():
+            return error_response(
+                code="INVALID_BENCHMARK_QUERY",
+                message="조회 파라미터가 올바르지 않습니다.",
+                errors=serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from benchmark.services.deep_diagnosis_service import DeepDiagnosisService
+
+        data = DeepDiagnosisService.get_deep_diagnosis(
+            business=business,
+            year=serializer.validated_data["year"],
+            month=serializer.validated_data["month"],
+        )
+        return success_response(
+            code="BENCHMARK_DEEP_DIAGNOSIS_SUCCESS",
+            message="8월 경영 종합 심층 진단 리포트를 조회했습니다.",
+            data=data,
+        )
+
