@@ -16,13 +16,5 @@
       "resTransferTaxTypeDate": "20260101",
       "message": "성공"
     }
-  ],
-  "code": "CF-00000",
-  "message": "성공",
-  "resCompanyIdentityNo": "2148678901",
-  "resBusinessStatus": "부가가치세일반과세자입니다.",
-  "taxation_type_code": "1",
-  "resTaxationTypeCode": "1",
-  "resClosingDate": "",
-  "resTransferTaxTypeDate": "20260101"
+  ]
 }
