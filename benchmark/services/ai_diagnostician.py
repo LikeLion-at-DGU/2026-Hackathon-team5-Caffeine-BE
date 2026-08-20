@@ -2,9 +2,9 @@ import json
 import logging
 from dataclasses import dataclass
 from django.conf import settings
+from openai import OpenAI
 
 from benchmark.services.calculator import BenchmarkCalculationResult
-from core.llm import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +174,10 @@ class AIDiagnostician:
 """
 
         try:
-            client = get_client(client=self.client)
+            client = self.client or OpenAI(
+                api_key=settings.OPENAI_API_KEY,
+                timeout=getattr(settings, "OPENAI_TIMEOUT_SECONDS", 20.0),
+            )
             response = client.chat.completions.create(
                 model=getattr(settings, "OPENAI_MODEL", "gpt-5.6-luna"),
                 messages=[
