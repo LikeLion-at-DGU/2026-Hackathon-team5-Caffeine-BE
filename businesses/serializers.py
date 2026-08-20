@@ -12,6 +12,11 @@ class BusinessSerializer(serializers.ModelSerializer):
         source="tax_type_changed_date",
         read_only=True,
     )
+    industry_name = serializers.SerializerMethodField()
+
+    def get_industry_name(self, obj):
+        parts = [p for p in [obj.business_type, obj.business_item] if p]
+        return " / ".join(parts) if parts else ""
 
     class Meta:
         model = Business
