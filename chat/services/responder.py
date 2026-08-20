@@ -116,7 +116,7 @@ class RuleBasedChatResponder:
         content = (
             f"💡 **{business.business_name} 사장님을 위한 4대 카페 부가세 절세 전략**\n\n"
             f"1. **🥛 우유·생과일 의제매입세액 공제 챙기기**\n"
-            f"   - 우유, 원두 생두, 과일 등 면세 농·축산물을 구입할 때 면세 계산서나 신용카드 영수증을 수취하면 매입금액의 **9/109 (음식점업 특례율)**를 부가세에서 추가 공제받을 수 있습니다.\n\n"
+            f"   - 면세 농·축·수·임산물을 과세 음식용역의 원재료로 사용하면 의제매입세액 공제 대상이 될 수 있습니다. **9/109 특례율은 2026년 말까지 과세표준 2억원 이하 개인 음식점업자에게 적용**되며, 사업자 유형·증빙·공제한도 확인이 필요합니다.\n\n"
             f"2. **💳 국세청 홈택스에 '사업용 신용카드' 등록하기**\n"
             f"   - 매장에서 쓰는 카드를 홈택스에 미리 등록해 두면 소모품, 비품, 포장재 구입 시 10% 부가세 매입세액 공제가 누락 없이 자동 반영됩니다.\n\n"
             f"3. **👥 알바생·직원 인건비 원천세 적기 신고**\n"
@@ -138,7 +138,7 @@ class RuleBasedChatResponder:
         content = (
             f"📜 **카페 운영 관련 주요 세법 및 법령 근거**\n\n"
             f"• **부가가치세법 제42조 (면세농산물등 의제매입세액 공제특례)**\n"
-            f"  부가가치세를 면제받아 공급받은 농산물·축산물·수산물 또는 임산물을 원재료로 하여 제조·가공한 과세 재화·용역에 대해 일정 비율을 매입세액으로 공제합니다. (외식업 간이/일반 9/109 적용)\n\n"
+            f"  부가가치세를 면제받아 공급받은 농산물·축산물·수산물 또는 임산물을 원재료로 하여 제조·가공한 과세 재화·용역에 대해 일정 비율을 매입세액으로 공제합니다. 2026년 말까지 과세표준 2억원 이하 개인 음식점업자는 9/109 특례율이 적용되며, 그 밖의 사업자는 법정 구분에 따라 공제율이 달라집니다.\n\n"
             f"• **소득세법 제128조 (원천징수세액의 납부기한)**\n"
             f"  원천징수의무자는 매월 징수한 세액을 그 징수일이 속하는 달의 다음 달 10일까지 관할 세무서에 납부하여야 합니다.\n\n"
             f"• **부가가치세법 제32조 (세금계산서 발급)**\n"
@@ -175,9 +175,16 @@ class RuleBasedChatResponder:
             result_sentence = f"현재 자료 기준 예상 납부세액은 {_won(forecast['payable_vat'])}입니다."
         content = (
             f"{year}년 {month}월 매출세액은 {_won(forecast['output_vat'])}, "
-            f"확정된 공제 매입세액은 {_won(forecast['deductible_input_vat'])}입니다. "
+            f"확정된 일반 매입세액은 {_won(forecast['deductible_input_vat'])}입니다. "
             f"{result_sentence}"
         )
+        if forecast["deemed_purchase_deduction"] > 0:
+            content += (
+                f" 예상 납부세액에는 면세 원재료 후보액 "
+                f"{_won(forecast['deemed_purchase_candidate_amount'])}에 대한 "
+                f"의제매입세액 추정 {_won(forecast['deemed_purchase_deduction'])}이 포함되었습니다. "
+                "이 금액은 개인 음식점업자 특례율을 가정한 추정치로 신고 전 적격성과 한도를 확인해야 합니다."
+            )
         if forecast["unconfirmed_transaction_count"]:
             content += (
                 f" 아직 공제 여부를 확인하지 않은 거래가 "
@@ -191,6 +198,12 @@ class RuleBasedChatResponder:
                 "sources": ["BUSINESS", "TAX"],
                 "payable_vat": format(forecast["payable_vat"] or ZERO, "f"),
                 "refundable_vat": format(forecast["refundable_vat"] or ZERO, "f"),
+                "deemed_purchase_deduction": format(
+                    forecast["deemed_purchase_deduction"] or ZERO, "f"
+                ),
+                "deemed_purchase_calculation_status": forecast[
+                    "deemed_purchase_calculation_status"
+                ],
             },
         )
 

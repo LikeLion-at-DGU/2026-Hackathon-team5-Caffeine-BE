@@ -37,8 +37,12 @@ class SeoulCommercialClient:
             response.raise_for_status()
             data = response.json()
         except requests.RequestException as exc:
-            logger.warning(f"서울시 OpenAPI 요청 실패: {exc}")
-            raise SeoulCommercialClientError(f"서울시 상권분석 API 연결 실패: {exc}") from exc
+            # requests 예외 문자열에는 인증키가 포함된 전체 URL이 들어갈 수 있다.
+            # 로그·관리 명령 출력·디버그 예외 체인 어디에도 원본 URL을 남기지 않는다.
+            logger.warning("서울시 OpenAPI 요청 실패 (%s)", type(exc).__name__)
+            raise SeoulCommercialClientError(
+                "서울시 상권분석 API 연결에 실패했습니다. 네트워크 상태와 API 키를 확인해 주세요."
+            ) from None
         except json.JSONDecodeError as exc:
             raise SeoulCommercialClientError(f"서울시 응답 JSON 파싱 실패: {exc}") from exc
 

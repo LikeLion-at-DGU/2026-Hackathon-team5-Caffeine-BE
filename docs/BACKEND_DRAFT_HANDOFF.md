@@ -52,7 +52,9 @@ python manage.py runserver
 - `GET /api/tax/closing/2026-08/?business_id=1`
 - `POST /api/tax/closing/2026-08/approve/` (`business_id`)
 
-의제매입은 현재 `면세 원재료 후보`만 식별한다. 세법상 공제율은 적용하지 않으며 응답의 `deemed_purchase_deduction`은 `0`이다.
+의제매입은 `면세 원재료 후보` 중 사업용·공제확정 거래를 대상으로 한다. 2026년 음식점업 사업장은 개인사업자·과세표준 2억원 이하를 가정해 `9/109` 추정액을 계산하지만, 현재 Business 모델에 개인/법인 구분과 과세기간 과세표준 누계가 없어 법정 공제한도는 적용하지 않는다. 응답의 `deemed_purchase_calculation_status`, `calculation_assumptions`, `warnings`를 함께 표시해야 하며 확정 신고세액으로 표현하면 안 된다.
+
+신용카드 월 매출 집계는 공급가액과 세액이 분리되어 있지 않으므로 일반과세 카페의 전액 과세 매출을 가정해 `총액 × 10/110`으로 매출세액을 추정한다. `card_sales_summary.is_estimate`, `calculation_method`, `warnings`를 함께 표시해야 하며 면세·영세율 매출이 섞인 경우 실제 신고세액과 달라질 수 있다.
 
 ### Analytics
 
@@ -100,6 +102,6 @@ POST 응답에는 FE 편의를 위한 `data.answer`와 전체 `assistant_message
 6. Payroll 고용형태 enum은 `FULL_TIME`, `PART_TIME`, `FREELANCER`다. FE Mock의 `REGULAR`는 `FULL_TIME`으로 바꿔야 한다.
 7. Payroll 요약 호출에는 `year`, `month`가 필요하다.
 8. Analytics `expense_breakdown`에서 화면 표시명은 `label`, 필터·식별값은 `category`다.
-9. 거래의 `is_deemed`는 후보 표시용이다. 실제 의제매입 공제 확정값으로 표현하면 안 된다.
+9. 거래의 `is_deemed`는 후보 표시용이다. Tax 응답의 `deemed_purchase_deduction`도 명시된 가정에 따른 추정값이므로 실제 의제매입 공제 확정값으로 표현하면 안 된다.
 
 로컬 Vite 기본 주소 `http://localhost:5173`은 백엔드 CORS 허용 목록에 포함되어 있다.

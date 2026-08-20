@@ -6,6 +6,11 @@ from transactions.models import Transaction
 
 from ..models import DeductionReview
 from .deduction_service import DeductionReviewService
+from .deemed_purchase_service import (
+    LEGAL_BASIS,
+    SPECIAL_RATE_VALID_THROUGH,
+    estimate_deemed_purchase_deduction,
+)
 from .periods import month_range
 from transactions.services.querysets import effective_purchase_transactions
 
@@ -95,19 +100,30 @@ def build_deduction_breakdown(*, business, year: int, month: int) -> dict:
         )
 
     normal_input_vat = _sum(taxable, "transaction__vat_amount")
+    deemed_purchase_candidate_amount = _sum(deemed_candidates)
+    deemed_estimate = estimate_deemed_purchase_deduction(
+        business=business,
+        candidate_amount=deemed_purchase_candidate_amount,
+        year=year,
+    )
     unconfirmed_count = review_required.count()
     return {
         "business_id": business.id,
         "year_month": f"{year:04d}-{month:02d}",
         "deduction_grade": "검토 필요" if unconfirmed_count else "공제 검토 완료",
-        "total_deductible_amount": int(normal_input_vat),
+        "total_deductible_amount": int(normal_input_vat + deemed_estimate.deduction),
         "normal_input_vat": int(normal_input_vat),
-        "deemed_purchase_candidate_amount": int(_sum(deemed_candidates)),
-        "deemed_purchase_deduction": 0,
+        "deemed_purchase_candidate_amount": int(deemed_purchase_candidate_amount),
+        "deemed_purchase_deduction": int(deemed_estimate.deduction),
+        "deemed_purchase_rate": deemed_estimate.rate,
+        "deemed_purchase_calculation_status": deemed_estimate.calculation_status,
+        "deemed_purchase_rate_valid_through": (
+            SPECIAL_RATE_VALID_THROUGH if deemed_estimate.rate else None
+        ),
+        "legal_basis": LEGAL_BASIS,
+        "calculation_assumptions": deemed_estimate.assumptions,
         "unconfirmed_transaction_count": unconfirmed_count,
         "structure": structure,
         "item_details": item_details,
-        "warnings": [
-            "의제매입 후보 금액은 표시만 하며 공제율을 적용한 세액은 아직 계산하지 않습니다."
-        ],
+        "warnings": deemed_estimate.warnings,
     }

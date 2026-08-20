@@ -1,4 +1,5 @@
 from unittest.mock import patch, MagicMock
+import requests
 from django.test import TestCase
 
 from integrations.seoul_commercial import SeoulCommercialClient, SeoulCommercialClientError
@@ -36,3 +37,19 @@ class SeoulCommercialClientTests(TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["TRDAR_CD_NM"], "성수동골목")
         self.assertEqual(rows[0]["SVC_INDUTY_CD"], "CS100010")
+
+    @patch("integrations.seoul_commercial.client.requests.get")
+    def test_request_failure_does_not_expose_api_key_in_log_or_error(self, mock_get):
+        secret_key = "secret-seoul-api-key"
+        mock_get.side_effect = requests.ConnectionError(
+            f"connection failed: http://openapi.seoul.go.kr:8088/{secret_key}/json/service"
+        )
+        client = SeoulCommercialClient(api_key=secret_key)
+
+        with self.assertLogs("integrations.seoul_commercial.client", level="WARNING") as logs:
+            with self.assertRaises(SeoulCommercialClientError) as raised:
+                client.fetch_estimated_sales()
+
+        output = " ".join(logs.output) + " " + str(raised.exception)
+        self.assertNotIn(secret_key, output)
+        self.assertNotIn("openapi.seoul.go.kr", output)
