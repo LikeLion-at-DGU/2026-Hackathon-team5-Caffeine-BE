@@ -57,9 +57,20 @@ class BusinessInfoService:
                 ]
             )
 
+        industry_name = " · ".join(
+            value
+            for value in [
+                business.business_type,
+                business.business_item,
+            ]
+            if value
+        )
         return {
             "business_id": business.id,
             "industry_code": business.industry_code,
+            "industry_name": industry_name,
+
+            # 일단 API에는 같이 남겨도 됨
             "business_type": business.business_type,
             "business_item": business.business_item,
         }

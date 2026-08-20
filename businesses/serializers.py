@@ -25,6 +25,7 @@ class BusinessSerializer(serializers.ModelSerializer):
             "industry_code",
             "business_type",
             "business_item",
+            "industry_name",
             "business_status",
             "tax_type",
             "tax_type_code",
