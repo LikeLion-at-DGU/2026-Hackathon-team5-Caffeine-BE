@@ -151,7 +151,8 @@ class LLMTransactionClassifier:
 
         import json
         import logging
-        from openai import OpenAI
+
+        from core.llm import get_client
 
         logger = logging.getLogger(__name__)
 
@@ -169,10 +170,7 @@ class LLMTransactionClassifier:
         }
 
         try:
-            client = OpenAI(
-                api_key=settings.OPENAI_API_KEY,
-                timeout=getattr(settings, "OPENAI_TIMEOUT_SECONDS", 20.0),
-            )
+            client = get_client()
             model_name = getattr(settings, "OPENAI_MODEL", "gpt-5.6-luna")
             response = client.chat.completions.create(
                 model=model_name,
