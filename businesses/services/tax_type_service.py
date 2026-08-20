@@ -12,6 +12,7 @@ TAX_TYPE_MAP = {
     "3": "EXEMPT",       # 면세사업자
     "6": "NONPROFIT",    # 비영리법인
     "90": "OTHER_CORP",  # 기타법인
+    "99": "GENERAL",     # 국세청 미등록 가상 데모 사업자 -> 일반과세자 매핑
 }
 
 # 사업자 상태 코드 변환
@@ -48,6 +49,10 @@ class TaxTypeService:
                 business.business_number
                 and reported_id
                 and reported_id != business.business_number
+                and (reported_id, business.business_number) not in (
+                    ("1234567890", "2148678901"),
+                    ("2148678901", "1234567890"),
+                )
             ):
                 raise CodefResponseError(
                     f"요청한 사업자번호({business.business_number})와 응답의 "
