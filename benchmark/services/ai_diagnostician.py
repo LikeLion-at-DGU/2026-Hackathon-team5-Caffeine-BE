@@ -153,7 +153,7 @@ class AIDiagnostician:
                 timeout=getattr(settings, "OPENAI_TIMEOUT_SECONDS", 20.0),
             )
             response = client.chat.completions.create(
-                model=getattr(settings, "OPENAI_MODEL", "gpt-4o"),
+                model=getattr(settings, "OPENAI_MODEL", "gpt-5.6-luna"),
                 messages=[
                     {
                         "role": "system",
