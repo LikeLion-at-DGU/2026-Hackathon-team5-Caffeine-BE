@@ -4,9 +4,11 @@ from django.db.models import Sum
 
 from businesses.models import Business
 from transactions.models import Transaction, MonthlySalesSummary
-from payroll.models import Payment
+from payroll.services.payment_service import get_monthly_summary as get_payroll_summary
 from benchmark.models import IndustryBenchmark
 from tax.services.vat_service import VatForecastService, UnsupportedTaxType
+from tax.services.periods import month_range
+from transactions.services.querysets import effective_transactions
 
 
 @dataclass
@@ -91,64 +93,50 @@ class BenchmarkCalculator:
     @classmethod
     def _calculate_month_metrics(cls, business: Business, year: int, month: int) -> dict:
         """특정 월의 매출/카테고리별 지출을 실제 장부 데이터 기반으로 집계한다."""
-        # 매출 집계
+        start_date, end_date = month_range(year, month)
+        transactions = effective_transactions(
+            business=business,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        # 카드 월매출 집계와 현금영수증/세금계산서 건별 매출은 서로 다른
+        # 매출 채널이므로 Analytics와 동일하게 합산한다.
         sales_summary = MonthlySalesSummary.objects.filter(
             business=business,
             year=year,
             month=month,
         ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
 
-        # 거래내역 중 매출액도 합산 (만약 MonthlySalesSummary가 비어있을 경우 fallback)
-        tx_sales = Transaction.objects.filter(
-            business=business,
-            transaction_date__year=year,
-            transaction_date__month=month,
+        tx_sales = transactions.filter(
             transaction_type=Transaction.TransactionType.SALE,
         ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
 
-        total_revenue = sales_summary if sales_summary > 0 else tx_sales
-        # 데모 또는 데이터가 0일 경우 현실적인 기본값 12,000,000원 적용
-        if total_revenue <= Decimal("0"):
-            total_revenue = Decimal("12000000")
+        total_revenue = sales_summary + tx_sales
 
-        purchases = Transaction.objects.filter(
-            business=business,
-            transaction_date__year=year,
-            transaction_date__month=month,
+        # 경영분석 비용은 대시보드와 동일하게 취소/확정중복/개인지출을
+        # 제외한 사업 지출만 사용한다.
+        purchases = transactions.filter(
             transaction_type=Transaction.TransactionType.PURCHASE,
+            expense_purpose=Transaction.ExpensePurpose.BUSINESS,
         )
 
         # 식자재·원두
         raw_mat_sum = purchases.filter(
             category=Transaction.Category.RAW_MATERIAL
         ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
-        if raw_mat_sum <= Decimal("0"):
-            raw_mat_sum = total_revenue * Decimal("0.365")  # 36.5%
-
         # 포장재·소모품
         supplies_sum = purchases.filter(
             category=Transaction.Category.SUPPLIES
         ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
-        if supplies_sum <= Decimal("0"):
-            supplies_sum = total_revenue * Decimal("0.062")  # 6.2%
-
         # 임차료·관리비
         rent_sum = purchases.filter(
             category__in=[Transaction.Category.RENT, Transaction.Category.UTILITIES]
         ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
-        if rent_sum <= Decimal("0"):
-            rent_sum = total_revenue * Decimal("0.100")  # 10.0%
-
-        # 인건비 (Payment)
-        payroll_sum = Payment.objects.filter(
-            employee__business=business,
-            year=year,
-            month=month,
-        ).aggregate(total=Sum("gross_pay"))["total"] or Decimal("0")
-        if payroll_sum <= Decimal("0"):
-            payroll_sum = total_revenue * Decimal("0.233")  # 23.3%
-
-        total_expense = raw_mat_sum + supplies_sum + rent_sum + payroll_sum
+        purchase_sum = purchases.aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
+        payroll_summary = get_payroll_summary(business.id, year, month)
+        payroll_sum = Decimal(str(payroll_summary["total_labor_cost"]))
+        total_expense = purchase_sum + payroll_sum
 
         return {
             "total_revenue": total_revenue,
@@ -157,6 +145,7 @@ class BenchmarkCalculator:
             "supplies_sum": supplies_sum,
             "rent_sum": rent_sum,
             "payroll_sum": payroll_sum,
+            "purchase_sum": purchase_sum,
             "my_raw_mat_pct": cls._to_pct(raw_mat_sum, total_revenue),
             "my_labor_pct": cls._to_pct(payroll_sum, total_revenue),
             "my_rent_pct": cls._to_pct(rent_sum, total_revenue),
@@ -172,7 +161,7 @@ class BenchmarkCalculator:
         """
         try:
             result = VatForecastService.calculate(business=business, year=year, month=month)
-            return int(result["deductible_input_vat"])
+            return int(result["total_deductible_input_vat"])
         except UnsupportedTaxType:
             return 0
         except Exception:

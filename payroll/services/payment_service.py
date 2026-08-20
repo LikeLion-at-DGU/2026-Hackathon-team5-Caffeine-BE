@@ -64,16 +64,34 @@ def list_payments(business_id: int, year: int | None = None, month: int | None =
 def get_monthly_summary(business_id: int, year: int, month: int) -> dict:
     payments = list_payments(business_id, year=year, month=month)
     total_labor_cost = 0
+    total_gross_pay = 0
     total_withholding_tax = 0
+    total_employee_insurance = 0
+    total_deductions = 0
+    total_net_pay = 0
     for payment in payments:
+        payslip = get_payslip_data(payment)
+        total_gross_pay += payment.gross_pay
         total_labor_cost += payment.gross_pay
         total_labor_cost += calculate_employer_insurance_total(payment.employee, payment.gross_pay)
         total_withholding_tax += payment.withholding_tax
+        total_employee_insurance += (
+            payslip["national_pension"]
+            + payslip["health_insurance"]
+            + payslip["long_term_care"]
+            + payslip["employment_insurance"]
+        )
+        total_deductions += payslip["deductions_total"]
+        total_net_pay += payslip["net_pay"]
 
     return {
         "employee_count": payments.count(),
+        "total_gross_pay": total_gross_pay,
         "total_labor_cost": total_labor_cost,
         "withholding_tax": total_withholding_tax,
+        "employee_insurance_total": total_employee_insurance,
+        "deductions_total": total_deductions,
+        "net_pay_total": total_net_pay,
     }
 
 

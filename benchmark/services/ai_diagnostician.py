@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from django.conf import settings
 
 from benchmark.services.calculator import BenchmarkCalculationResult
+from businesses.models import Business
 from core.llm import get_client
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,8 @@ class AIDiagnosisResult:
 
 from transactions.models import Transaction
 from decimal import Decimal
+from tax.services.periods import month_range
+from transactions.services.querysets import effective_purchase_transactions
 
 
 class RuleBasedDiagnostician:
@@ -29,7 +32,18 @@ class RuleBasedDiagnostician:
     @classmethod
     def diagnose(cls, calc: BenchmarkCalculationResult) -> AIDiagnosisResult:
         diff_pct = calc.revenue_diff_pct
-        if diff_pct > 20:
+        profit_margin = (
+            (calc.total_revenue - calc.total_expense) / calc.total_revenue * 100
+            if calc.total_revenue > 0
+            else -100
+        )
+        if profit_margin <= 0:
+            score = 45
+            grade_label = "위험 — 비용 구조 개선 필요"
+        elif profit_margin < 10:
+            score = 60
+            grade_label = "주의 — 수익성 점검 필요"
+        elif diff_pct > 20:
             score = 95
             grade_label = "최우수 — 상위 5% 매장"
         elif diff_pct > 5:
@@ -44,11 +58,14 @@ class RuleBasedDiagnostician:
 
         # 1. 실제 매장의 8월 거래 내역 분석
         year, month = map(int, calc.year_month.split("-"))
-        purchases = Transaction.objects.filter(
-            business_id=calc.business_id,
-            transaction_date__year=year,
-            transaction_date__month=month,
-            transaction_type=Transaction.TransactionType.PURCHASE,
+        start_date, end_date = month_range(year, month)
+        all_purchases = effective_purchase_transactions(
+            business=Business.objects.get(pk=calc.business_id),
+            start_date=start_date,
+            end_date=end_date,
+        )
+        purchases = all_purchases.filter(
+            expense_purpose=Transaction.ExpensePurpose.BUSINESS,
         )
 
         # (1) 면세 의제매입 대상(우유 등) 탐색 (가장 큰 매입처 우선)
@@ -61,7 +78,7 @@ class RuleBasedDiagnostician:
         deemed_vat_saving = int(milk_amount * Decimal(9) / Decimal(109))
 
         # (2) 개인 지출(불공제) 탐색
-        personal_txs = purchases.filter(
+        personal_txs = all_purchases.filter(
             expense_purpose=Transaction.ExpensePurpose.PERSONAL
         )
         personal_count = personal_txs.count()
@@ -123,12 +140,25 @@ class AIDiagnostician:
         self.client = client
 
     def diagnose(self, calc: BenchmarkCalculationResult) -> AIDiagnosisResult:
-        if not getattr(settings, "OPENAI_API_KEY", ""):
+        if not getattr(settings, "OPENAI_API_KEY", "") or (
+            getattr(settings, "IS_TEST_RUN", False) and self.client is None
+        ):
             logger.info("OPENAI_API_KEY 미설정으로 규칙 기반 진단(Fallback)을 사용합니다.")
             return RuleBasedDiagnostician.diagnose(calc)
 
         diff_pct = calc.revenue_diff_pct
-        if diff_pct > 20:
+        profit_margin = (
+            (calc.total_revenue - calc.total_expense) / calc.total_revenue * 100
+            if calc.total_revenue > 0
+            else -100
+        )
+        if profit_margin <= 0:
+            example_score = 45
+            example_grade = "위험 — 비용 구조 개선 필요"
+        elif profit_margin < 10:
+            example_score = 60
+            example_grade = "주의 — 수익성 점검 필요"
+        elif diff_pct > 20:
             example_score = 95
             example_grade = "최우수 — 상위 5% 매장"
         elif diff_pct > 5:
@@ -191,6 +221,9 @@ class AIDiagnostician:
 
             score = int(parsed.get("score", example_score))
             grade_label = str(parsed.get("grade_label", example_grade))
+            if profit_margin <= 0:
+                score = min(score, 59)
+                grade_label = example_grade
             prescriptions = parsed.get("prescriptions", [])
             summary_points = parsed.get("summary_points", [])
 

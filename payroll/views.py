@@ -139,12 +139,7 @@ class PaymentListCreateView(APIView):
         return success_response(
             code="PAYROLL_CREATE_SUCCESS",
             message="급여 정보를 등록했습니다.",
-            data={
-                "payment_id": payment.id,
-                "work_hours": payment.work_hours,
-                "gross_pay": payment.gross_pay,
-                "withholding_tax": payment.withholding_tax,
-            },
+            data=PaymentListItemSerializer(payment).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -173,12 +168,7 @@ class PaymentDetailView(APIView):
         return success_response(
             code="PAYROLL_UPDATE_SUCCESS",
             message="급여 정보를 수정했습니다.",
-            data={
-                "payment_id": payment.id,
-                "work_hours": payment.work_hours,
-                "gross_pay": payment.gross_pay,
-                "withholding_tax": payment.withholding_tax,
-            },
+            data=PaymentListItemSerializer(payment).data,
         )
 
 

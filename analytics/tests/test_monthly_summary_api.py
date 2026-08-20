@@ -5,6 +5,7 @@ from rest_framework.test import APIClient
 
 from businesses.models import Business
 from payroll.models import Employee, Payment
+from tax.services.vat_service import VatForecastService
 from transactions.models import MonthlySalesSummary, Transaction
 
 
@@ -156,6 +157,29 @@ class MonthlySummaryWithTransactionsAPITests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["code"], "DEDUCTION_BREAKDOWN_SUCCESS")
-        self.assertEqual(response.data["data"]["deduction_grade"], "공제율 우수")
-        self.assertEqual(len(response.data["data"]["structure"]), 3)
-        self.assertEqual(len(response.data["data"]["item_details"]), 4)
+        self.assertEqual(response.data["data"]["deduction_grade"], "검토 필요")
+        self.assertEqual(len(response.data["data"]["structure"]), 4)
+        self.assertGreater(response.data["data"]["unconfirmed_transaction_count"], 0)
+
+    def test_dashboard_vat_matches_tax_service_exactly(self):
+        self.business.tax_type = "GENERAL"
+        self.business.save(update_fields=["tax_type"])
+
+        response = self.client.get(self.url, {"year": 2026, "month": 8})
+        forecast = VatForecastService.calculate(
+            business=self.business,
+            year=2026,
+            month=8,
+        )
+        data = response.data["data"]
+
+        self.assertEqual(data["vat_reserve_amount"], int(forecast["payable_vat"]))
+        self.assertEqual(data["vat_breakdown"]["sales_tax"], int(forecast["output_vat"]))
+        self.assertEqual(
+            data["vat_breakdown"]["purchase_tax"],
+            int(forecast["deductible_input_vat"]),
+        )
+        self.assertEqual(
+            data["vat_breakdown"]["deemed_purchase_deduction"],
+            int(forecast["deemed_purchase_deduction"]),
+        )

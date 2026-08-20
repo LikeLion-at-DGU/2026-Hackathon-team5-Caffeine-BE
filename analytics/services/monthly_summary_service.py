@@ -8,8 +8,8 @@ from django.db.models import Sum
 
 from businesses.models import Business
 from payroll.services.payment_service import get_monthly_summary as get_payroll_summary
-from tax.models import DeductionReview
-from tax.services.vat_service import UnsupportedTaxType, VatForecastService
+from tax.services.deduction_breakdown_service import build_deduction_breakdown
+from tax.services.vat_service import VatForecastService
 from transactions.models import MonthlySalesSummary, Transaction
 from transactions.services.querysets import effective_transactions
 
@@ -163,64 +163,20 @@ def get_monthly_tax_summary(business_id: int, year: int, month: int) -> dict:
     vat_warnings = []
 
     if business.tax_type == "GENERAL":
-        try:
-            forecast = VatForecastService.calculate(business=business, year=year, month=month)
-            sales_tax = (
-                int(forecast["output_vat"])
-                if forecast.get("output_vat") and forecast["output_vat"] > 0
-                else int(total_sales * Decimal("0.1"))
-            )
-            
-            # 매입세액 (공제 가능한 사업 지출 부가세)
-            deductible_vat_sum = Transaction.objects.filter(
-                business_id=business_id,
-                transaction_date__year=year,
-                transaction_date__month=month,
-                transaction_type=Transaction.TransactionType.PURCHASE,
-                expense_purpose=Transaction.ExpensePurpose.BUSINESS,
-            ).exclude(
-                source_deduction_status=Transaction.SourceDeductionStatus.NON_DEDUCTIBLE
-            ).aggregate(total=Sum("vat_amount"))["total"] or Decimal("0")
-
-            purchase_tax = (
-                int(forecast["deductible_input_vat"])
-                if forecast.get("deductible_input_vat") and forecast["deductible_input_vat"] > 0
-                else int(deductible_vat_sum)
-            )
-
-            # 의제매입 공제세액 (면세 원재료 우유 등의 9/109)
-            deemed_raw_mat_sum = Transaction.objects.filter(
-                business_id=business_id,
-                transaction_date__year=year,
-                transaction_date__month=month,
-                transaction_type=Transaction.TransactionType.PURCHASE,
-                category=Transaction.Category.RAW_MATERIAL,
-                vat_amount=0,
-            ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
-            deemed_deduction = int(deemed_raw_mat_sum * Decimal(9) / Decimal(109))
-
-            vat_reserve = sales_tax - purchase_tax - deemed_deduction
-            if vat_reserve < 0:
-                vat_reserve = 0
-
-            vat_reserve_amount = vat_reserve
-            vat_breakdown = {
-                "sales_tax": sales_tax,
-                "purchase_tax": purchase_tax,
-                "deemed_purchase_deduction": deemed_deduction,
-            }
-            vat_warnings = forecast.get("warnings", [])
-        except (UnsupportedTaxType, Exception) as exc:
-            sales_tax = int(total_sales * Decimal("0.1"))
-            purchase_tax = 0
-            deemed_deduction = 0
-            vat_reserve_amount = sales_tax
-            vat_breakdown = {
-                "sales_tax": sales_tax,
-                "purchase_tax": purchase_tax,
-                "deemed_purchase_deduction": deemed_deduction,
-            }
-            vat_warnings = [str(exc)]
+        forecast = VatForecastService.calculate(business=business, year=year, month=month)
+        # Tax 앱을 부가세 계산의 단일 진실 공급원으로 사용한다. 이전 구현은
+        # Analytics가 raw Transaction을 다시 합산하면서 개인 지출/중복 거래까지
+        # 의제매입 후보로 포함해 Tax API와 서로 다른 금액을 반환할 수 있었다.
+        sales_tax = int(forecast["output_vat"])
+        purchase_tax = int(forecast["deductible_input_vat"])
+        deemed_deduction = int(forecast["deemed_purchase_deduction"])
+        vat_reserve_amount = int(forecast["payable_vat"])
+        vat_breakdown = {
+            "sales_tax": sales_tax,
+            "purchase_tax": purchase_tax,
+            "deemed_purchase_deduction": deemed_deduction,
+        }
+        vat_warnings = forecast.get("warnings", [])
     elif business.tax_type in ("SIMPLIFIED", "EXEMPT"):
         vat_reserve_amount = None
         vat_breakdown = None
@@ -248,104 +204,10 @@ def get_monthly_tax_summary(business_id: int, year: int, month: int) -> dict:
 
 
 def get_deduction_breakdown(business_id: int, year: int, month: int) -> dict:
-    """홈 화면 부가세 공제 구조 분석 및 품목별 공제율 현황."""
+    """Tax 앱의 공제 구조 계산 결과를 홈 화면 응답으로 그대로 사용한다."""
     business = Business.objects.get(pk=business_id)
-
-    purchases = Transaction.objects.filter(
-        business_id=business_id,
-        transaction_date__year=year,
-        transaction_date__month=month,
-        transaction_type=Transaction.TransactionType.PURCHASE,
+    return build_deduction_breakdown(
+        business=business,
+        year=year,
+        month=month,
     )
-
-    if not purchases.exists():
-        return {
-            "deduction_grade": "공제율 우수",
-            "total_deductible_amount": 0,
-            "structure": [
-                {"category": "과세매입(공제가능)", "ratio": 0.0, "amount": 0},
-                {"category": "의제재료(의제매입)", "ratio": 0.0, "amount": 0},
-                {"category": "비공제 지출", "ratio": 0.0, "amount": 0},
-            ],
-            "item_details": [],
-        }
-
-    taxable_amount = 0
-    deemed_amount = 0
-    non_deductible_amount = 0
-    taxable_vat = 0
-
-    for tx in purchases:
-        amt = int(tx.total_amount)
-        # 개인 지출 또는 불공제
-        if (
-            tx.expense_purpose == Transaction.ExpensePurpose.PERSONAL
-            or tx.source_deduction_status == Transaction.SourceDeductionStatus.NON_DEDUCTIBLE
-        ):
-            non_deductible_amount += amt
-        # 의제매입 (면세 원재료 - 우유 등)
-        elif tx.category == Transaction.Category.RAW_MATERIAL and tx.vat_amount == 0:
-            deemed_amount += amt
-        else:
-            taxable_amount += amt
-            taxable_vat += int(tx.vat_amount) if tx.vat_amount > 0 else int(amt * Decimal("0.1") / Decimal("1.1"))
-
-    total_expense = taxable_amount + deemed_amount + non_deductible_amount
-    if total_expense == 0:
-        total_expense = 1
-
-    taxable_ratio = round((taxable_amount / total_expense) * 100, 1)
-    deemed_ratio = round((deemed_amount / total_expense) * 100, 1)
-    non_deductible_ratio = round(100.0 - taxable_ratio - deemed_ratio, 1)
-
-    # 의제매입세액 9/109 공제액 계산
-    deemed_vat = int(deemed_amount * Decimal(9) / Decimal(109))
-    total_deductible_amount = taxable_vat + deemed_vat
-
-    return {
-        "deduction_grade": "공제율 우수",
-        "total_deductible_amount": total_deductible_amount,
-        "structure": [
-            {
-                "category": "과세매입(공제가능)",
-                "ratio": taxable_ratio,
-                "amount": taxable_amount,
-            },
-            {
-                "category": "의제재료(의제매입)",
-                "ratio": deemed_ratio,
-                "amount": deemed_amount,
-            },
-            {
-                "category": "비공제 지출",
-                "ratio": non_deductible_ratio,
-                "amount": non_deductible_amount,
-            },
-        ],
-        "item_details": [
-            {
-                "item_name": "우유·유제품",
-                "deduction_type": "면세공제",
-                "category": "면세 의제매입",
-                "rate": 91,
-            },
-            {
-                "item_name": "원두·커피재료",
-                "deduction_type": "과세공제",
-                "category": "과세매입",
-                "rate": 88,
-            },
-            {
-                "item_name": "포장재·소모품",
-                "deduction_type": "과세공제",
-                "category": "과세매입",
-                "rate": 72,
-            },
-            {
-                "item_name": "전기·가스요금",
-                "deduction_type": "과세공제",
-                "category": "과세매입",
-                "rate": 66,
-            },
-        ],
-    }
