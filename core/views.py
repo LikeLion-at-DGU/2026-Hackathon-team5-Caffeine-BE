@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from core.responses import error_response, success_response
@@ -16,6 +17,9 @@ class LoginView(APIView):
     """사용자 로그인 및 DRF Token 발급."""
 
     permission_classes = [AllowAny]
+    # 비밀번호 무차별 시도 방어
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -53,6 +57,8 @@ class RegisterView(APIView):
     """사용자 회원가입 및 기본 사업장 생성 후 토큰 즉시 발급."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)

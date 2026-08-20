@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 
 from businesses.models import Business
 from core.responses import error_response, success_response
+from core.permissions import check_business
 from payroll.exceptions import PayrollServiceError
 from payroll.serializers import (
     EmployeeCreateSerializer, EmployeeListItemSerializer, EmployeeUpdateSerializer,
@@ -26,27 +27,9 @@ def _error_response(code: str, message: str, http_status: int, errors: dict | No
     )
 
 
-def _check_business(request, business_id: int):
-    if not request.user or not request.user.is_authenticated:
-        return _error_response(
-            "UNAUTHORIZED",
-            "인증 자격 증명이 제공되지 않았습니다.",
-            status.HTTP_401_UNAUTHORIZED,
-        )
-    business = Business.objects.filter(pk=business_id).first()
-    if not business:
-        return _error_response(
-            "BUSINESS_NOT_FOUND",
-            "사업장을 찾을 수 없습니다.",
-            status.HTTP_404_NOT_FOUND,
-        )
-    if business.owner_id is not None and business.owner_id != request.user.id:
-        return _error_response(
-            "FORBIDDEN_BUSINESS_ACCESS",
-            "해당 사업장에 대한 접근 권한이 없습니다.",
-            status.HTTP_403_FORBIDDEN,
-        )
-    return None
+def _check_business(request, business_id):
+    """core.permissions.check_business 위임 — IDOR 검증 로직 단일화."""
+    return check_business(request, business_id)
 
 
 class EmployeeListCreateView(APIView):

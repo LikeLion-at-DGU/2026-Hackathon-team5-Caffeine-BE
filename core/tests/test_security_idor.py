@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
@@ -64,7 +64,7 @@ class SecurityIdorTestCase(TestCase):
             "/api/auth/register/",
             {
                 "username": "new_user",
-                "password": "password123",
+                "password": "Caffeine!2026",
                 "business_name": "신규 카페",
             },
             format="json",
@@ -130,3 +130,156 @@ class SecurityIdorTestCase(TestCase):
         # 삭제된 토큰으로 재요청 시 401 반환
         retry_response = self.client.get(f"/api/businesses/{self.business_a.id}/")
         self.assertEqual(retry_response.status_code, 401)
+
+
+@override_settings(DEMO_MODE=False, ALLOW_UNOWNED_BUSINESS_ACCESS=False)
+class UnownedBusinessFailClosedTests(TestCase):
+    """owner가 지정되지 않은 사업장이 fail-closed로 차단되는지 검증한다.
+
+    직전까지는 `business.owner_id is not None and ...` 조건 때문에 owner=NULL인
+    사업장에 인증된 아무 사용자나 200으로 접근할 수 있었다. 이 스위트가 그 회귀를
+    막는다.
+    """
+
+    ORPHAN_PATHS = [
+        "/api/businesses/{b}/",
+        "/api/businesses/{b}/payroll/employees/",
+        "/api/businesses/{b}/payroll/summary/?year=2026&month=8",
+        "/api/businesses/{b}/analytics/summary/?year=2026&month=8",
+        "/api/businesses/{b}/analytics/cost-ratio/?year=2026&month=8",
+        "/api/businesses/{b}/settings/business/",
+        "/api/businesses/{b}/settings/subscription/",
+        "/api/businesses/{b}/reports/2026-08/",
+        "/api/businesses/{b}/benchmark/?year=2026&month=8",
+        "/api/businesses/{b}/transactions/?year=2026&month=8",
+        "/api/transactions/?business_id={b}",
+        "/api/chat/messages/?business_id={b}",
+        "/api/tax/vat-forecast/?business_id={b}&year_month=2026-08",
+    ]
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username="stranger", password="password123")
+        self.token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        self.orphan = Business.objects.create(
+            owner=None,
+            business_name="소유자 미지정 사업장",
+            business_number="999-99-99999",
+            is_demo=False,
+        )
+
+    def test_unowned_business_is_forbidden_for_any_authenticated_user(self):
+        for path in self.ORPHAN_PATHS:
+            with self.subTest(path=path):
+                response = self.client.get(path.format(b=self.orphan.id))
+                self.assertEqual(
+                    response.status_code,
+                    403,
+                    f"{path} 가 owner=NULL 사업장에 {response.status_code}를 "
+                    f"반환했습니다 (403이어야 함)",
+                )
+
+    def test_unauthenticated_gets_401_not_403(self):
+        anon = APIClient()
+        # 테스트 러너가 기본 토큰을 주입하므로 명시적으로 비운다.
+        anon.credentials(HTTP_AUTHORIZATION="")
+        response = anon.get(f"/api/businesses/{self.orphan.id}/payroll/employees/")
+        self.assertEqual(response.status_code, 401)
+
+
+@override_settings(DEMO_MODE=True, ALLOW_UNOWNED_BUSINESS_ACCESS=False, DEMO_USERNAME="demo")
+class DemoGuestAuthenticationTests(TestCase):
+    """DEMO_MODE 게스트 경로가 데모 사업장 밖으로 새지 않는지 검증한다."""
+
+    def setUp(self):
+        self.demo_user = User.objects.create_user(username="demo", password="demo1234")
+        self.demo_business = Business.objects.create(
+            owner=self.demo_user,
+            business_name="수아네 커피집",
+            business_number="214-86-78901",
+            is_demo=True,
+        )
+        self.real_user = User.objects.create_user(username="real_owner", password="password123")
+        self.real_business = Business.objects.create(
+            owner=self.real_user,
+            business_name="실제 사용자 카페",
+            business_number="333-33-33333",
+            is_demo=False,
+        )
+        self.anon = APIClient()
+        self.anon.credentials(HTTP_AUTHORIZATION="")
+
+    def test_guest_can_read_demo_business(self):
+        """토큰 없이도 데모 사업장은 조회된다 (부스 시연용)."""
+        response = self.anon.get(f"/api/businesses/{self.demo_business.id}/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_guest_cannot_read_real_user_business(self):
+        """[핵심] 게스트는 is_demo=False 사업장에 절대 접근할 수 없다."""
+        response = self.anon.get(f"/api/businesses/{self.real_business.id}/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_guest_cannot_read_real_user_payroll(self):
+        """주민등록번호가 담긴 급여 API도 차단된다."""
+        response = self.anon.get(
+            f"/api/businesses/{self.real_business.id}/payroll/employees/"
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_guest_cannot_read_real_user_transactions(self):
+        response = self.anon.get(f"/api/transactions/?business_id={self.real_business.id}")
+        self.assertEqual(response.status_code, 403)
+
+    @override_settings(DEMO_MODE=False)
+    def test_demo_mode_off_requires_token_even_for_demo_business(self):
+        """DEMO_MODE=0이면 데모 사업장도 토큰을 요구한다."""
+        response = self.anon.get(f"/api/businesses/{self.demo_business.id}/")
+        self.assertEqual(response.status_code, 401)
+
+    def test_invalid_token_is_401_not_downgraded_to_guest(self):
+        """잘못된 토큰이 게스트로 강등되지 않는다."""
+        bad = APIClient()
+        bad.credentials(HTTP_AUTHORIZATION="Token deadbeefdeadbeefdeadbeef")
+        response = bad.get(f"/api/businesses/{self.demo_business.id}/")
+        self.assertEqual(response.status_code, 401)
+
+    def test_real_owner_still_reaches_own_business_with_token(self):
+        owned = APIClient()
+        token = Token.objects.create(user=self.real_user)
+        owned.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+        response = owned.get(f"/api/businesses/{self.real_business.id}/")
+        self.assertEqual(response.status_code, 200)
+
+
+@override_settings(DEMO_MODE=False)
+class RegisterPasswordPolicyTests(TestCase):
+    """회원가입 비밀번호 정책 검증."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.client.credentials(HTTP_AUTHORIZATION="")
+
+    def test_weak_numeric_password_is_rejected(self):
+        response = self.client.post(
+            "/api/auth/register/",
+            {"username": "weakuser", "password": "1234"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_common_password_is_rejected(self):
+        response = self.client.post(
+            "/api/auth/register/",
+            {"username": "weakuser2", "password": "password"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_strong_password_is_accepted(self):
+        response = self.client.post(
+            "/api/auth/register/",
+            {"username": "stronguser", "password": "Caffeine!2026"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)

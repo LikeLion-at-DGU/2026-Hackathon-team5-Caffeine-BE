@@ -1,9 +1,11 @@
 import math
 
 from django.utils import timezone
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from core.responses import error_response, success_response
+from core.permissions import check_business_owner
 from tax.services.periods import parse_year_month
 
 from .models import ChatMessage
@@ -16,22 +18,15 @@ from .services.chat_service import ChatService
 
 
 def _check_business_owner(request, business):
-    if not request.user or not request.user.is_authenticated:
-        return error_response(
-            code="UNAUTHORIZED",
-            message="인증 자격 증명이 제공되지 않았습니다.",
-            status=401,
-        )
-    if business.owner_id is not None and business.owner_id != request.user.id:
-        return error_response(
-            code="FORBIDDEN_BUSINESS_ACCESS",
-            message="해당 사업장에 대한 접근 권한이 없습니다.",
-            status=403,
-        )
-    return None
+    """core.permissions.check_business_owner 위임 — IDOR 검증 로직 단일화."""
+    return check_business_owner(request, business)
 
 
 class ChatMessageView(APIView):
+    # 유료 LLM 호출 남용 방어
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "llm"
+
     def post(self, request):
         serializer = ChatMessageCreateSerializer(data=request.data)
         if not serializer.is_valid():
