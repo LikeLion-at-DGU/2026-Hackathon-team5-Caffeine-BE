@@ -33,6 +33,11 @@ class Command(BaseCommand):
             Business.objects.filter(id=1).delete()
             Business.objects.filter(business_number=business_number, is_demo=True).delete()
             Business.objects.filter(business_number="1234567890").delete()
+            try:
+                from benchmark.models import AIDiagnosisHistory
+                AIDiagnosisHistory.objects.all().delete()
+            except Exception:
+                pass
 
         business, _ = Business.objects.update_or_create(
             id=1,
