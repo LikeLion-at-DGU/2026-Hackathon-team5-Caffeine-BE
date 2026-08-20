@@ -220,24 +220,75 @@ def get_deduction_breakdown(business_id: int, year: int, month: int) -> dict:
     """홈 화면 부가세 공제 구조 분석 및 품목별 공제율 현황."""
     business = Business.objects.get(pk=business_id)
 
+    purchases = Transaction.objects.filter(
+        business_id=business_id,
+        transaction_date__year=year,
+        transaction_date__month=month,
+        transaction_type=Transaction.TransactionType.PURCHASE,
+    )
+
+    if not purchases.exists():
+        return {
+            "deduction_grade": "공제율 우수",
+            "total_deductible_amount": 0,
+            "structure": [
+                {"category": "과세매입(공제가능)", "ratio": 0.0, "amount": 0},
+                {"category": "의제재료(의제매입)", "ratio": 0.0, "amount": 0},
+                {"category": "비공제 지출", "ratio": 0.0, "amount": 0},
+            ],
+            "item_details": [],
+        }
+
+    taxable_amount = 0
+    deemed_amount = 0
+    non_deductible_amount = 0
+    taxable_vat = 0
+
+    for tx in purchases:
+        amt = int(tx.total_amount)
+        # 개인 지출 또는 불공제
+        if (
+            tx.expense_purpose == Transaction.ExpensePurpose.PERSONAL
+            or tx.source_deduction_status == Transaction.SourceDeductionStatus.NON_DEDUCTIBLE
+        ):
+            non_deductible_amount += amt
+        # 의제매입 (면세 원재료 - 우유 등)
+        elif tx.category == Transaction.Category.RAW_MATERIAL and tx.vat_amount == 0:
+            deemed_amount += amt
+        else:
+            taxable_amount += amt
+            taxable_vat += int(tx.vat_amount) if tx.vat_amount > 0 else int(amt * Decimal("0.1") / Decimal("1.1"))
+
+    total_expense = taxable_amount + deemed_amount + non_deductible_amount
+    if total_expense == 0:
+        total_expense = 1
+
+    taxable_ratio = round((taxable_amount / total_expense) * 100, 1)
+    deemed_ratio = round((deemed_amount / total_expense) * 100, 1)
+    non_deductible_ratio = round(100.0 - taxable_ratio - deemed_ratio, 1)
+
+    # 의제매입세액 9/109 공제액 계산
+    deemed_vat = int(deemed_amount * Decimal(9) / Decimal(109))
+    total_deductible_amount = taxable_vat + deemed_vat
+
     return {
         "deduction_grade": "공제율 우수",
-        "total_deductible_amount": 775000,
+        "total_deductible_amount": total_deductible_amount,
         "structure": [
             {
                 "category": "과세매입(공제가능)",
-                "ratio": 64.6,
-                "amount": 5880000,
+                "ratio": taxable_ratio,
+                "amount": taxable_amount,
             },
             {
                 "category": "의제재료(의제매입)",
-                "ratio": 24.2,
-                "amount": 2200000,
+                "ratio": deemed_ratio,
+                "amount": deemed_amount,
             },
             {
                 "category": "비공제 지출",
-                "ratio": 11.2,
-                "amount": 1020000,
+                "ratio": non_deductible_ratio,
+                "amount": non_deductible_amount,
             },
         ],
         "item_details": [
@@ -249,8 +300,8 @@ def get_deduction_breakdown(business_id: int, year: int, month: int) -> dict:
             },
             {
                 "item_name": "원두·커피재료",
-                "deduction_type": "면세공제",
-                "category": "면세 의제매입",
+                "deduction_type": "과세공제",
+                "category": "과세매입",
                 "rate": 88,
             },
             {
