@@ -26,6 +26,35 @@ class EmployeeCreateAPITests(TestCase):
         self.assertEqual(response.data["code"], "EMPLOYEE_CREATE_SUCCESS")
         self.assertIn("employee_id", response.data["data"])
 
+    def test_create_part_time_employee_saves_long_term_contract_flag(self):
+        payload = {
+            "name": "박장기",
+            "employment_type": "PART_TIME",
+            "hourly_wage": 12000,
+            "monthly_contracted_hours": 40,
+            "is_long_term_contract": True,
+        }
+
+        response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        employee = Employee.objects.get(id=response.data["data"]["employee_id"])
+        self.assertTrue(employee.is_long_term_contract)
+
+    def test_create_non_part_time_employee_clears_long_term_contract_flag(self):
+        payload = {
+            "name": "정직원",
+            "employment_type": "FULL_TIME",
+            "hourly_wage": 12000,
+            "is_long_term_contract": True,
+        }
+
+        response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        employee = Employee.objects.get(id=response.data["data"]["employee_id"])
+        self.assertFalse(employee.is_long_term_contract)
+
     def test_create_employee_stores_encrypted_rrn(self):
         payload = {
             "name": "김민지",
@@ -92,6 +121,14 @@ class EmployeeListAPITests(TestCase):
         self.assertEqual(statuses["장예은"], "ACTIVE")
         self.assertEqual(statuses["황사라"], "INACTIVE")
 
+    def test_list_exposes_long_term_contract_flag(self):
+        Employee.objects.filter(name="황사라").update(is_long_term_contract=True)
+
+        response = self.client.get(f"/api/businesses/{self.business.id}/payroll/employees/")
+
+        employees = {item["name"]: item for item in response.data["data"]}
+        self.assertTrue(employees["황사라"]["is_long_term_contract"])
+
 
 class EmployeeDetailAPITests(TestCase):
     def setUp(self):
@@ -108,6 +145,31 @@ class EmployeeDetailAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.employee.refresh_from_db()
         self.assertEqual(self.employee.hourly_wage, 11000)
+
+    def test_update_part_time_long_term_contract_flag(self):
+        self.employee.employment_type = "PART_TIME"
+        self.employee.save(update_fields=["employment_type"])
+
+        response = self.client.patch(
+            self.url, {"is_long_term_contract": True}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.employee.refresh_from_db()
+        self.assertTrue(self.employee.is_long_term_contract)
+
+    def test_changing_to_non_part_time_clears_long_term_contract_flag(self):
+        self.employee.employment_type = "PART_TIME"
+        self.employee.is_long_term_contract = True
+        self.employee.save(update_fields=["employment_type", "is_long_term_contract"])
+
+        response = self.client.patch(
+            self.url, {"employment_type": "FULL_TIME"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.employee.refresh_from_db()
+        self.assertFalse(self.employee.is_long_term_contract)
 
     def test_update_nonexistent_employee_returns_404(self):
         response = self.client.patch(

@@ -11,6 +11,8 @@ def create_employee(business_id: int, validated_data: dict) -> Employee:
 
     rrn_front = validated_data.pop("rrn_front", "")
     employee = Employee(business_id=business_id, **validated_data)
+    if employee.employment_type != "PART_TIME":
+        employee.is_long_term_contract = False
     employee.set_rrn_front(rrn_front)
     employee.save()
     return employee
@@ -31,6 +33,8 @@ def update_employee(business_id: int, employee_id: int, validated_data: dict) ->
     employee = get_employee(business_id, employee_id)
     for field, value in validated_data.items():
         setattr(employee, field, value)
+    if employee.employment_type != "PART_TIME":
+        employee.is_long_term_contract = False
     employee.save()
     return employee
 

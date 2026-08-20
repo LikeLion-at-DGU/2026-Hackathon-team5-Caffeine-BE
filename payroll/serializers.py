@@ -9,7 +9,15 @@ class EmployeeCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Employee
-        fields = ["name", "employment_type", "hourly_wage", "monthly_contracted_hours", "work_started_at", "rrn_front"]
+        fields = [
+            "name",
+            "employment_type",
+            "hourly_wage",
+            "monthly_contracted_hours",
+            "work_started_at",
+            "is_long_term_contract",
+            "rrn_front",
+        ]
 
     def create(self, validated_data):
         rrn_front = validated_data.pop("rrn_front", "")
@@ -22,7 +30,15 @@ class EmployeeCreateSerializer(serializers.ModelSerializer):
 class EmployeeUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
-        fields = ["name", "employment_type", "hourly_wage", "monthly_contracted_hours", "work_started_at", "status"]
+        fields = [
+            "name",
+            "employment_type",
+            "hourly_wage",
+            "monthly_contracted_hours",
+            "work_started_at",
+            "is_long_term_contract",
+            "status",
+        ]
         extra_kwargs = {field: {"required": False} for field in fields}
 
 
@@ -31,7 +47,16 @@ class EmployeeListItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Employee
-        fields = ["employee_id", "name", "employment_type", "hourly_wage", "monthly_contracted_hours", "work_started_at", "status"]
+        fields = [
+            "employee_id",
+            "name",
+            "employment_type",
+            "hourly_wage",
+            "monthly_contracted_hours",
+            "work_started_at",
+            "is_long_term_contract",
+            "status",
+        ]
         # rrn_front는 절대 포함하지 않음 — 민감정보 노출 방지 (2026-08-13 결정)
 
 
