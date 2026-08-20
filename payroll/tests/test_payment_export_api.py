@@ -1,4 +1,7 @@
+import io
+
 from django.test import TestCase
+from openpyxl import load_workbook
 from rest_framework.test import APIClient
 
 from businesses.models import Business
@@ -16,6 +19,21 @@ class PaymentExportAPITests(TestCase):
         Payment.objects.create(
             employee=employee, year=2026, month=8,
             work_hours=141, gross_pay=1_455_120, withholding_tax=8_734,
+        )
+        part_timer = Employee.objects.create(
+            business=self.business,
+            name="박서연",
+            employment_type="PART_TIME",
+            hourly_wage=10200,
+            is_long_term_contract=True,
+        )
+        Payment.objects.create(
+            employee=part_timer,
+            year=2026,
+            month=8,
+            work_hours=80,
+            gross_pay=816_000,
+            withholding_tax=0,
         )
 
     def test_export_pdf_returns_pdf_file(self):
@@ -36,6 +54,27 @@ class PaymentExportAPITests(TestCase):
         )
         self.assertGreater(len(response.content), 0)
         self.assertTrue(response.content.startswith(b"PK"))
+
+    def test_export_xlsx_includes_part_time_employment_insurance(self):
+        response = self.client.post(
+            self.url,
+            {"year": 2026, "month": 8, "format": "xlsx"},
+            format="json",
+        )
+
+        workbook = load_workbook(io.BytesIO(response.content), data_only=True)
+        sheet = workbook.active
+        headers = {cell.value: cell.column for cell in sheet[1]}
+        rows = {
+            sheet.cell(row=row, column=headers["직원명"]).value: row
+            for row in range(2, sheet.max_row + 1)
+        }
+        part_time_row = rows["박서연"]
+
+        self.assertEqual(
+            sheet.cell(row=part_time_row, column=headers["고용보험"]).value,
+            round(816_000 * 0.009),
+        )
 
     def test_export_invalid_format_returns_400(self):
         response = self.client.post(self.url, {"year": 2026, "month": 8, "format": "hwp"}, format="json")

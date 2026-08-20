@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.urls import reverse
 from rest_framework.test import APITestCase
@@ -53,6 +54,40 @@ class ChatApiTests(APITestCase):
         self.assertEqual(data["assistant_message"]["role"], ChatMessage.Role.ASSISTANT)
         self.assertIn("매출 1건", data["assistant_message"]["content"])
         self.assertEqual(ChatMessage.objects.count(), 2)
+
+    @patch("chat.views.timezone.localdate", return_value=date(2026, 8, 21))
+    def test_post_infers_month_from_message_when_year_month_is_omitted(self, _mock_date):
+        response = self.client.post(
+            reverse("chat-message-list-create"),
+            {
+                "business_id": self.business.id,
+                "message": "7월 인건비를 알려줘",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.data["data"]["user_message"]["metadata"]["year_month"],
+            "2026-07",
+        )
+
+    @patch("chat.views.timezone.localdate", return_value=date(2026, 1, 15))
+    def test_post_infers_previous_month_across_year_boundary(self, _mock_date):
+        response = self.client.post(
+            reverse("chat-message-list-create"),
+            {
+                "business_id": self.business.id,
+                "message": "지난달 경영 현황 알려줘",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.data["data"]["user_message"]["metadata"]["year_month"],
+            "2025-12",
+        )
 
     def test_get_returns_only_requested_business_history(self):
         ChatMessage.objects.create(
