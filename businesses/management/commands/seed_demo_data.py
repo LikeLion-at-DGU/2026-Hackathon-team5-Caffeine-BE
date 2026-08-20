@@ -117,6 +117,39 @@ class Command(BaseCommand):
                 ),
             )
 
+        # 미분류(UNCLASSIFIED) 매입 거래를 GPT-5 모델로 일괄 AI 분류
+        from decimal import Decimal
+        from transactions.services.classifier import LLMTransactionClassifier
+
+        unclassified_txs = list(Transaction.objects.filter(
+            business=business,
+            transaction_type=Transaction.TransactionType.PURCHASE,
+            category=Transaction.Category.UNCLASSIFIED,
+        ))
+        if unclassified_txs:
+            items_to_classify = [
+                {
+                    "merchant_name": tx.merchant_name,
+                    "total_amount": int(tx.total_amount),
+                    "source": tx.source_type,
+                }
+                for tx in unclassified_txs
+            ]
+            ai_results = LLMTransactionClassifier.classify_batch(
+                items_to_classify,
+                business_type=business.business_type or "카페/음식점업",
+            )
+            for res in ai_results:
+                idx = res.get("index")
+                cat = res.get("category")
+                conf = res.get("confidence")
+                if idx is not None and idx < len(unclassified_txs) and cat and cat != Transaction.Category.UNCLASSIFIED:
+                    target_tx = unclassified_txs[idx]
+                    target_tx.category = cat
+                    target_tx.classification_source = Transaction.ClassificationSource.AI
+                    target_tx.classification_confidence = Decimal(str(conf)) if conf else None
+                    target_tx.save(update_fields=["category", "classification_source", "classification_confidence", "updated_at"])
+
         # 직원 3명 등록 (이도현, 박서연, 최우식)
         employee_specs = [
             ("이도현", "FULL_TIME", 11500, 160),
