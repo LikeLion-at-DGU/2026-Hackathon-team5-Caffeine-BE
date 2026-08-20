@@ -1,0 +1,13 @@
+{
+  "result": {
+    "code": "CF-00000",
+    "extraMessage": "",
+    "message": "성공",
+    "transactionId": "6a80c1d43be64ebf9e72fcb6c82d34ad"
+  },
+  "data": {
+    "resBusinessTypeCode": "552303",
+    "resBusinessTypes": "비알코올 음료점업",
+    "resBusinessItems": "커피 전문점"
+  }
+}

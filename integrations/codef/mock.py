@@ -166,6 +166,91 @@ class MockCodefProvider(BaseCodefProvider):
         )
 
     # ==================================================
+# 사업자 등록사항
+# ==================================================
+
+def get_business_registration_info(self, business):
+    """사업자 업종정보 조회 Mock 응답을 반환한다."""
+
+    raw = load_fixture(
+        "business_registration_info_success.json"
+    )
+
+    result = raw.get("result", {})
+    code = result.get("code", "")
+
+    if code != _SUCCESS:
+        return {
+            "outcome": "FAILURE",
+            "error_code": code,
+            "error_message": result.get(
+                "message",
+                "",
+            ),
+        }
+
+    data = raw.get("data", {})
+
+    return {
+        "outcome": "SUCCESS",
+        "industry_code": data.get(
+            "resBusinessTypeCode",
+            "",
+        ),
+        "business_type": data.get(
+            "resBusinessTypes",
+            "",
+        ),
+        "business_item": data.get(
+            "resBusinessItems",
+            "",
+        ),
+    }
+    
+    # ==================================================
+# 사업자 등록사항
+# ==================================================
+
+def get_business_registration_info(self, business):
+    """사업자 업종정보 조회 Mock 응답을 반환한다."""
+
+    raw = load_fixture(
+        "business_registration_info_success.json"
+    )
+
+    result = raw.get("result", {})
+    code = result.get("code", "")
+
+    if code != _SUCCESS:
+        return {
+            "outcome": "FAILURE",
+            "error_code": code,
+            "error_message": result.get(
+                "message",
+                "",
+            ),
+        }
+
+    data = raw.get("data", {})
+
+    return {
+        "outcome": "SUCCESS",
+        "industry_code": data.get(
+            "resBusinessTypeCode",
+            "",
+        ),
+        "business_type": data.get(
+            "resBusinessTypes",
+            "",
+        ),
+        "business_item": data.get(
+            "resBusinessItems",
+            "",
+        ),
+    }
+    
+    
+    # ==================================================
     # 사업용 신용카드 매입
     # ==================================================
 

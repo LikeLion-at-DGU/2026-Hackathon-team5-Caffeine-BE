@@ -34,6 +34,9 @@ class BusinessSerializer(serializers.ModelSerializer):
 
         # CODEF 또는 서버에서 관리하는 필드는 수정 불가
         read_only_fields = [
+            "industry_code",
+            "business_type",
+            "business_item",
             "business_status",
             "tax_type",
             "tax_type_code",

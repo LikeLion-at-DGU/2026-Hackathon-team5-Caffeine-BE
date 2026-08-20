@@ -14,6 +14,7 @@ from .services.codef_auth_service import (
     InvalidAuthRequestError,
 )
 from .services.tax_type_service import CodefResponseError, TaxTypeService
+from .services.business_info_service import (BusinessInfoService, BusinessInfoSyncError)
 
 
 class BusinessViewSet(
@@ -101,6 +102,36 @@ class BusinessViewSet(
             data=result,
             code="TAX_TYPE_SYNC_SUCCESS",
             message="과세유형 정보를 동기화했습니다.",
+        )
+        
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="business-info/sync",
+        url_name="business-info-sync",
+    )
+    def business_info_sync(self, request, pk=None):
+        business = self.get_object()
+
+        try:
+            result = BusinessInfoService().sync(
+                business
+            )
+
+        except BusinessInfoSyncError as e:
+            return error_response(
+                code="BUSINESS_INFO_SYNC_ERROR",
+                message="사업자 업종정보를 동기화하지 못했습니다.",
+                errors={
+                    "detail": str(e)
+                },
+                status=502,
+            )
+
+        return success_response(
+            data=result,
+            code="BUSINESS_INFO_SYNC_SUCCESS",
+            message="사업자 업종정보를 동기화했습니다.",
         )
 
     @action(

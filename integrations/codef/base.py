@@ -34,6 +34,22 @@ class BaseCodefProvider(ABC):
         }
         """
         raise NotImplementedError
+    
+    @abstractmethod
+    def get_business_registration_info(self, business):
+        """사업자 등록사항에서 업종 정보를 조회한다.
+
+        반환 예시:
+        {
+            "outcome": "SUCCESS" | "FAILURE",
+            "industry_code": str,
+            "business_type": str,
+            "business_item": str,
+            "error_code": str,
+            "error_message": str,
+        }
+        """
+        raise NotImplementedError
 
     @abstractmethod
     def request_auth(self, business, connection_type):
