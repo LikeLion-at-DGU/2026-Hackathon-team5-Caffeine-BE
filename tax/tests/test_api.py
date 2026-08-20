@@ -152,6 +152,37 @@ class TaxApiTests(APITestCase):
         self.assertEqual(response.data["code"], "DEDUCTION_BREAKDOWN_SUCCESS")
         self.assertEqual(response.data["data"]["normal_input_vat"], 10000)
 
+    def test_deduction_breakdown_returns_deemed_purchase_estimate_and_basis(self):
+        self.business.business_type = "음식점업"
+        self.business.business_item = "커피전문점"
+        self.business.save(update_fields=["business_type", "business_item"])
+        deemed_purchase = self.create_transaction(
+            "milk-001",
+            Transaction.TransactionType.PURCHASE,
+            total_amount=Decimal("109000.00"),
+            supply_amount=Decimal("109000.00"),
+            vat_amount=Decimal("0.00"),
+            category=Transaction.Category.RAW_MATERIAL,
+            expense_purpose=Transaction.ExpensePurpose.BUSINESS,
+        )
+        DeductionReview.objects.create(
+            transaction=deemed_purchase,
+            confirmed_status=DeductionReview.ConfirmedStatus.DEDUCTIBLE,
+        )
+
+        response = self.client.get(
+            reverse("tax-deduction-breakdown"),
+            {"business_id": self.business.id, "year": 2026, "month": 8},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertEqual(data["deemed_purchase_candidate_amount"], 109000)
+        self.assertEqual(data["deemed_purchase_deduction"], 9000)
+        self.assertEqual(data["deemed_purchase_rate"], "9/109")
+        self.assertEqual(data["deemed_purchase_calculation_status"], "PROVISIONAL_UNCAPPED")
+        self.assertIn("부가가치세법 제42조", data["legal_basis"])
+
     def test_transaction_sync_rejects_period_overlapping_closed_month(self):
         MonthlyClose.objects.create(
             business=self.business,
