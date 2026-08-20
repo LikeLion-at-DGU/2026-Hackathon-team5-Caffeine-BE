@@ -164,9 +164,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'ko-kr'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Seoul'
 
 USE_I18N = True
 
@@ -195,6 +195,7 @@ CODEF_TIMEOUT_SECONDS = float(
 )
 CODEF_PUBLIC_KEY = os.environ.get("CODEF_PUBLIC_KEY", "").strip()
 
+# 서울시 열린데이터광장(공공데이터 포털) 상권분석 OpenAPI 일반 인증키 (공개 API 기본키)
 SEOUL_DATA_API_KEY = os.environ.get("SEOUL_DATA_API_KEY", "50645279656a35373938654e4e424d").strip()
 SEOUL_DATA_API_BASE_URL = os.environ.get("SEOUL_DATA_API_BASE_URL", "http://openapi.seoul.go.kr:8088").strip().rstrip("/")
 SEOUL_DATA_TIMEOUT_SECONDS = float(os.environ.get("SEOUL_DATA_TIMEOUT_SECONDS", "10"))
