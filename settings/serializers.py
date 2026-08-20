@@ -41,7 +41,9 @@ class BusinessInfoSerializer(serializers.Serializer):
     business_number = serializers.CharField(allow_null=True, allow_blank=True)
     tax_type = serializers.CharField(required=False)
     industry_code = serializers.CharField(allow_blank=True)
-    industry_name = serializers.CharField(required=False, allow_blank=True)
+    # 업태/종목 - CODEF 조회 시점에 채워지는 원본 값. 합쳐서 보여주는 건 프론트 담당
+    business_type = serializers.CharField(required=False, allow_blank=True)
+    business_item = serializers.CharField(required=False, allow_blank=True)
 
 
 class BusinessInfoUpdateSerializer(serializers.Serializer):

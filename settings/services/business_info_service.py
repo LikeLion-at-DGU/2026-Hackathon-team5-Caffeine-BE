@@ -12,15 +12,6 @@ from businesses.models import Business
 def get_business_info(business_id: int) -> dict:
     business = Business.objects.get(id=business_id)  # 없으면 Business.DoesNotExist
 
-    industry_name = " · ".join(
-        value
-        for value in [
-            business.business_type,
-            business.business_item,
-        ]
-        if value
-    )
-
     return {
         "business_name": business.business_name,
         "representative_name": business.representative_name,
@@ -29,7 +20,10 @@ def get_business_info(business_id: int) -> dict:
         "business_number": business.business_number,
         "tax_type": business.tax_type,
         "industry_code": business.industry_code,
-        "industry_name": industry_name,
+        # "업종명"으로 합치지 않고 원본 값 그대로 내려준다 - 합치는 로직(" · " 조인)은
+        # 이미 두 번이나 버그가 났던 자리라, 표시 방식은 프론트(BusinessInfoForm)에 맡긴다
+        "business_type": business.business_type,
+        "business_item": business.business_item,
     }
 
 
