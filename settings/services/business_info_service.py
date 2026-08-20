@@ -12,6 +12,15 @@ from businesses.models import Business
 def get_business_info(business_id: int) -> dict:
     business = Business.objects.get(id=business_id)  # 없으면 Business.DoesNotExist
 
+    industry_name = " · ".join(
+        value
+        for value in [
+            business.business_type,
+            business.business_item,
+        ]
+        if value
+    )
+
     return {
         "business_name": business.business_name,
         "representative_name": business.representative_name,
@@ -20,6 +29,7 @@ def get_business_info(business_id: int) -> dict:
         "business_number": business.business_number,
         "tax_type": business.tax_type,
         "industry_code": business.industry_code,
+        "industry_name": industry_name,
     }
 
 

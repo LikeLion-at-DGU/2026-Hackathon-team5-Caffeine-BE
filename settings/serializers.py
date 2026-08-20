@@ -41,6 +41,7 @@ class BusinessInfoSerializer(serializers.Serializer):
     business_number = serializers.CharField(allow_null=True, allow_blank=True)
     tax_type = serializers.CharField(required=False)
     industry_code = serializers.CharField(allow_blank=True)
+    industry_name = serializers.CharField(required=False, allow_blank=True)
 
 
 class BusinessInfoUpdateSerializer(serializers.Serializer):
