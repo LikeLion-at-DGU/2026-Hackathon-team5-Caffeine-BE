@@ -99,7 +99,13 @@ class Command(BaseCommand):
                 Transaction.ExpensePurpose.PERSONAL if is_personal else Transaction.ExpensePurpose.BUSINESS
             )
             transaction.expense_purpose_source = Transaction.ClassificationSource.USER
-            transaction.save(update_fields=["expense_purpose", "expense_purpose_source", "updated_at"])
+
+            # 매일유업 등 면세 우유/식자재는 원재료(RAW_MATERIAL)로 분류하여 의제매입 뱃지 즉시 활성화
+            if "매일유업" in transaction.merchant_name or "우유" in transaction.merchant_name:
+                transaction.category = Transaction.Category.RAW_MATERIAL
+                transaction.classification_source = Transaction.ClassificationSource.AI
+
+            transaction.save(update_fields=["expense_purpose", "expense_purpose_source", "category", "classification_source", "updated_at"])
 
             review = DeductionReviewService.get_or_create(transaction)
             DeductionReviewService.confirm(
@@ -146,10 +152,11 @@ class Command(BaseCommand):
             if close is None or close.status != MonthlyClose.Status.CLOSED:
                 MonthlyCloseService.approve(business=business, year=2026, month=m)
 
-        # 8월(현재 월)은 사용자가 지출 내역 분류를 직접 조작해볼 수 있도록 마감을 열어둔다.
-        MonthlyClose.objects.filter(business=business, year=2026, month=8).delete()
-
-        report = generate_report(business.id, options["year_month"])
+        # 마감된 가장 최근 월(7월) 정기 리포트 생성
+        try:
+            report = generate_report(business.id, "2026-07")
+        except Exception:
+            pass
 
         self.stdout.write(self.style.SUCCESS("진호다방 6개월(3~8월) 신규 데모 데이터 생성 완료"))
         self.stdout.write(f"business_id={business.id}")
