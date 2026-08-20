@@ -286,7 +286,11 @@ class TransactionExportView(APIView):
             )
 
         params = query.validated_data
-        queryset = Transaction.objects.filter(business=params["business"]).order_by("-transaction_date", "-transaction_time", "-id")
+        queryset = (
+            Transaction.objects.filter(business=params["business"])
+            .select_related("deduction_review")
+            .order_by("-transaction_date", "-transaction_time", "-id")
+        )
 
         if params.get("start_date"):
             queryset = queryset.filter(transaction_date__gte=params["start_date"])
@@ -337,6 +341,20 @@ class TransactionExportView(APIView):
         }
 
         for tx in queryset:
+            # 부가세 공제 상태 결정 (개인 지출은 무조건 불공제)
+            if tx.expense_purpose == Transaction.ExpensePurpose.PERSONAL:
+                deduction_display = "불공제"
+            elif hasattr(tx, "deduction_review") and tx.deduction_review and tx.deduction_review.confirmed_status:
+                rev_status = str(tx.deduction_review.confirmed_status)
+                if rev_status == "DEDUCTIBLE":
+                    deduction_display = "공제 대상"
+                elif rev_status == "NON_DEDUCTIBLE":
+                    deduction_display = "불공제"
+                else:
+                    deduction_display = "확인 필요"
+            else:
+                deduction_display = deduction_labels.get(tx.source_deduction_status, "확인 필요")
+
             writer.writerow([
                 tx.transaction_date.strftime("%Y-%m-%d") if tx.transaction_date else "",
                 tx.transaction_time.strftime("%H:%M:%S") if tx.transaction_time else "",
@@ -346,7 +364,7 @@ class TransactionExportView(APIView):
                 source_labels.get(tx.source_type, str(tx.source_type)),
                 tx.get_category_display() if hasattr(tx, "get_category_display") else str(tx.category),
                 purpose_labels.get(tx.expense_purpose, str(tx.expense_purpose)),
-                deduction_labels.get(tx.source_deduction_status, str(tx.source_deduction_status)),
+                deduction_display,
                 int(tx.supply_amount) if tx.supply_amount is not None else 0,
                 int(tx.vat_amount) if tx.vat_amount is not None else 0,
                 int(tx.total_amount) if tx.total_amount is not None else 0,
@@ -475,12 +493,40 @@ class TransactionPurposeView(APIView):
                 errors=serializer.errors,
             )
 
-        transaction.expense_purpose = serializer.validated_data["expense_purpose"]
+        new_purpose = serializer.validated_data["expense_purpose"]
+        transaction.expense_purpose = new_purpose
         transaction.expense_purpose_source = Transaction.ClassificationSource.USER
+
+        from tax.models import DeductionReview
+        from tax.services.deduction_service import DeductionReviewService
+
+        if new_purpose == Transaction.ExpensePurpose.PERSONAL:
+            review = DeductionReviewService.get_or_create(transaction)
+            DeductionReviewService.confirm(
+                review=review,
+                confirmed_status=DeductionReview.ConfirmedStatus.NON_DEDUCTIBLE,
+            )
+            transaction.source_deduction_status = Transaction.SourceDeductionStatus.NON_DEDUCTIBLE
+        elif new_purpose == Transaction.ExpensePurpose.BUSINESS:
+            review = DeductionReviewService.get_or_create(transaction)
+            suggested = review.suggested_status or DeductionReview.SuggestedStatus.DEDUCTIBLE
+            confirmed = (
+                DeductionReview.ConfirmedStatus.DEDUCTIBLE
+                if str(suggested) == "DEDUCTIBLE"
+                else DeductionReview.ConfirmedStatus.NON_DEDUCTIBLE
+            )
+            DeductionReviewService.confirm(review=review, confirmed_status=confirmed)
+            transaction.source_deduction_status = (
+                Transaction.SourceDeductionStatus.DEDUCTIBLE
+                if confirmed == DeductionReview.ConfirmedStatus.DEDUCTIBLE
+                else Transaction.SourceDeductionStatus.NON_DEDUCTIBLE
+            )
+
         transaction.save(
             update_fields=[
                 "expense_purpose",
                 "expense_purpose_source",
+                "source_deduction_status",
                 "updated_at",
             ]
         )
