@@ -43,6 +43,22 @@ def _period_query_data(request):
     return data
 
 
+def _check_tax_business_owner(request, business):
+    if not request.user or not request.user.is_authenticated:
+        return error_response(
+            code="UNAUTHORIZED",
+            message="인증 자격 증명이 제공되지 않았습니다.",
+            status=401,
+        )
+    if business.owner_id is not None and business.owner_id != request.user.id:
+        return error_response(
+            code="FORBIDDEN_BUSINESS_ACCESS",
+            message="해당 사업장에 대한 접근 권한이 없습니다.",
+            status=403,
+        )
+    return None
+
+
 def _business_scope(request):
     business_id = request.data.get("business_id") or request.query_params.get("business_id")
     serializer = TaxBusinessScopeSerializer(data={"business_id": business_id})
@@ -52,7 +68,11 @@ def _business_scope(request):
             message="business_id가 필요하거나 올바르지 않습니다.",
             errors=serializer.errors,
         )
-    return serializer.validated_data["business"], None
+    business = serializer.validated_data["business"]
+    owner_err = _check_tax_business_owner(request, business)
+    if owner_err:
+        return None, owner_err
+    return business, None
 
 
 class DeductionListView(APIView):
@@ -62,6 +82,10 @@ class DeductionListView(APIView):
             return _invalid_query(query, "INVALID_DEDUCTION_QUERY")
 
         params = query.validated_data
+        owner_err = _check_tax_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         year, month = parse_year_month(params["year_month"])
         start_date, end_date = month_range(year, month)
         purchases = effective_purchase_transactions(
@@ -168,6 +192,10 @@ class VatForecastView(APIView):
         if not query.is_valid():
             return _invalid_query(query)
         params = query.validated_data
+        owner_err = _check_tax_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         year, month = parse_year_month(params["year_month"])
         try:
             data = VatForecastService.calculate(
@@ -194,6 +222,10 @@ class DeductionBreakdownView(APIView):
         if not query.is_valid():
             return _invalid_query(query, "INVALID_DEDUCTION_BREAKDOWN_QUERY")
         params = query.validated_data
+        owner_err = _check_tax_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         year, month = parse_year_month(params["year_month"])
         data = build_deduction_breakdown(
             business=params["business"],
@@ -215,6 +247,10 @@ class MonthlyCloseDetailView(APIView):
         if not query.is_valid():
             return _invalid_query(query, "INVALID_YEAR_MONTH")
         params = query.validated_data
+        owner_err = _check_tax_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         year, month = parse_year_month(year_month)
         close = MonthlyClose.objects.filter(
             business=params["business"], year=year, month=month, status=MonthlyClose.Status.CLOSED
@@ -240,6 +276,10 @@ class MonthlyCloseApproveView(APIView):
         if not query.is_valid():
             return _invalid_query(query, "INVALID_YEAR_MONTH")
         params = query.validated_data
+        owner_err = _check_tax_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         year, month = parse_year_month(year_month)
         try:
             data = MonthlyCloseService.approve(
@@ -276,6 +316,10 @@ class MonthlyCloseReopenView(APIView):
         if not query.is_valid():
             return _invalid_query(query, "INVALID_YEAR_MONTH")
         params = query.validated_data
+        owner_err = _check_tax_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         year, month = parse_year_month(year_month)
         MonthlyClose.objects.filter(
             business=params["business"], year=year, month=month

@@ -15,6 +15,22 @@ from .serializers import (
 from .services.chat_service import ChatService
 
 
+def _check_business_owner(request, business):
+    if not request.user or not request.user.is_authenticated:
+        return error_response(
+            code="UNAUTHORIZED",
+            message="인증 자격 증명이 제공되지 않았습니다.",
+            status=401,
+        )
+    if business.owner_id is not None and business.owner_id != request.user.id:
+        return error_response(
+            code="FORBIDDEN_BUSINESS_ACCESS",
+            message="해당 사업장에 대한 접근 권한이 없습니다.",
+            status=403,
+        )
+    return None
+
+
 class ChatMessageView(APIView):
     def post(self, request):
         serializer = ChatMessageCreateSerializer(data=request.data)
@@ -25,6 +41,10 @@ class ChatMessageView(APIView):
                 errors=serializer.errors,
             )
         params = serializer.validated_data
+        owner_err = _check_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         if params.get("year_month"):
             year, month = parse_year_month(params["year_month"])
         else:
@@ -57,6 +77,10 @@ class ChatMessageView(APIView):
                 errors=query.errors,
             )
         params = query.validated_data
+        owner_err = _check_business_owner(request, params["business"])
+        if owner_err:
+            return owner_err
+
         messages = ChatMessage.objects.filter(business=params["business"])
         search_query = params.get("keyword") or params.get("q")
         if search_query:

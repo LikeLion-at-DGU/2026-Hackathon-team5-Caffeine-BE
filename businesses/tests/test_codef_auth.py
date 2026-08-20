@@ -4,12 +4,14 @@ from rest_framework.test import APITestCase
 from unittest.mock import patch
 
 from businesses.models import Business, CodefConnection
+from core.test_utils import authenticate_client_for_business
 
 
 @override_settings(CODEF_MODE="mock")
 class CodefAuthTests(APITestCase):
     def setUp(self):
         self.business = Business.objects.create(business_name="카페비서 데모카페")
+        authenticate_client_for_business(self, self.business)
 
     def test_hometax_auth_request_sets_auth_required(self):
         url = reverse("business-codef-auth", kwargs={"pk": self.business.id})

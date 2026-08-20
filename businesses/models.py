@@ -1,9 +1,17 @@
+from django.conf import settings
 from django.db import models
 
 
 class Business(models.Model):
     """사업장 기본 정보 및 과세유형 상태."""
 
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="businesses",
+        null=True,
+        blank=True,
+    )
     business_name = models.CharField(max_length=100)
     representative_name = models.CharField(max_length=50, blank=True)
     birth_date = models.CharField(max_length=20, default="1988-05-12", blank=True)  # 생년월일 (YYYY-MM-DD 또는 6자리)
