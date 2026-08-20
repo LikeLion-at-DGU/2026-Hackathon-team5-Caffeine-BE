@@ -7,7 +7,7 @@
   },
   "data": {
     "resBusinessTypeCode": "552303",
-    "resBusinessTypes": "비알코올 음료점업",
-    "resBusinessItems": "커피 전문점"
+    "business_type": "음식점업",
+    "business_item": "커피전문점 및 음료"
   }
 }
