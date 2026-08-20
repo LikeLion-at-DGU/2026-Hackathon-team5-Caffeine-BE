@@ -1,8 +1,11 @@
 from datetime import date
+from decimal import Decimal
+
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
 from rest_framework.authtoken.models import Token
 
+from benchmark.models import IndustryBenchmark
 from businesses.models import Business, CodefConnection
 from integrations.codef.mock import MockCodefProvider
 from payroll.models import Employee, Payment
@@ -11,15 +14,30 @@ from reports.services.report_service import generate_report
 from tax.models import DeductionReview, MonthlyClose
 from tax.services.closing_service import MonthlyCloseService
 from tax.services.deduction_service import DeductionReviewService
-from tax.services.periods import month_range, parse_year_month
+from tax.services.periods import parse_year_month
 from transactions.models import MonthlySalesSummary, Transaction
 from transactions.services.sync_service import TransactionSyncService
 
 
 class Command(BaseCommand):
-    help = "CODEF Mock부터 진호다방의 3~8월 6개월치 거래·세금·급여·리포트 데모 흐름을 생성합니다."
+    help = "CODEF Mock부터 수아네 커피집의 3~8월 6개월치 거래·세금·급여·리포트 데모 흐름을 생성합니다."
 
     DEMO_TOKEN_KEY = "demo-caffeine-token-2026"
+    DEMO_BUSINESS_NUMBER = "2148678901"
+    DEMO_CATEGORY_KEYWORDS = (
+        (Transaction.Category.RAW_MATERIAL, ("매일유업", "일리카페", "스위트시럽", "베이커리팩토리")),
+        (Transaction.Category.UTILITIES, ("한국전력",)),
+        (Transaction.Category.SUPPLIES, ("코스트코", "쿠팡 비즈니스", "삼원위생", "팩플러스")),
+        (Transaction.Category.FEES, ("나이스정보통신",)),
+    )
+    BENCHMARK_SPECS = {
+        3: (10_000_000, "34.00", "27.00", "13.00", "5.50", "15.00"),
+        4: (10_400_000, "33.50", "26.50", "12.80", "5.20", "16.00"),
+        5: (10_800_000, "33.00", "26.00", "12.60", "5.00", "16.50"),
+        6: (11_200_000, "32.80", "25.50", "12.50", "4.90", "17.00"),
+        7: (11_600_000, "32.50", "25.30", "12.50", "4.80", "17.20"),
+        8: (12_000_000, "32.00", "25.00", "12.50", "4.80", "16.80"),
+    }
 
     def add_arguments(self, parser):
         parser.add_argument("--year-month", default="2026-08")
@@ -30,8 +48,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        year, month = parse_year_month(options["year_month"])
-        business_number = "2148678901"
+        parse_year_month(options["year_month"])
+        business_number = self.DEMO_BUSINESS_NUMBER
 
         # 1. 고정 데모 유저 및 토큰 생성
         demo_user, _ = User.objects.get_or_create(
@@ -66,15 +84,22 @@ class Command(BaseCommand):
             defaults={"user": demo_user},
         )
 
+        existing_id_one = Business.objects.filter(id=1).first()
+        if existing_id_one and not (
+            existing_id_one.is_demo
+            and existing_id_one.business_number == business_number
+        ):
+            raise CommandError(
+                "business_id=1이 수아네 커피집 데모 사업장이 아니므로 안전을 위해 중단합니다."
+            )
+
         if options["reset"]:
-            Business.objects.filter(id=1).delete()
-            Business.objects.filter(business_number=business_number, is_demo=True).delete()
-            Business.objects.filter(business_number="1234567890").delete()
-            try:
-                from benchmark.models import AIDiagnosisHistory
-                AIDiagnosisHistory.objects.all().delete()
-            except Exception:
-                pass
+            # 데모 사업장 FK 하위 데이터만 cascade로 정리한다. 다른 사업자의
+            # 거래·급여·리포트·AI 진단 이력은 절대 삭제하지 않는다.
+            Business.objects.filter(
+                business_number=business_number,
+                is_demo=True,
+            ).delete()
 
         business, _ = Business.objects.update_or_create(
             id=1,
@@ -110,7 +135,7 @@ class Command(BaseCommand):
         sync_start_date = date(2026, 3, 1)
         sync_end_date = date(2026, 8, 31)
 
-        sync_result = TransactionSyncService(provider=MockCodefProvider()).sync(
+        TransactionSyncService(provider=MockCodefProvider()).sync(
             business=business,
             start_date=sync_start_date,
             end_date=sync_end_date,
@@ -123,6 +148,7 @@ class Command(BaseCommand):
         )
 
         # 개인 지출 분류 및 공제 확정 처리 (CU 편의점/유튜브 프리미엄/무신사/블루보틀 등)
+        # 분류 결과는 외부 LLM 호출에 의존하지 않는 고정 시연 스냅샷으로 만든다.
         personal_keywords = ("유튜브", "무신사", "블루보틀", "CU", "편의점", "개인")
         purchases = Transaction.objects.filter(
             business=business,
@@ -138,12 +164,20 @@ class Command(BaseCommand):
             )
             transaction.expense_purpose_source = Transaction.ClassificationSource.USER
 
-            # 매일유업 등 면세 우유/식자재는 원재료(RAW_MATERIAL)로 분류하여 의제매입 뱃지 즉시 활성화
-            if "매일유업" in transaction.merchant_name or "우유" in transaction.merchant_name:
-                transaction.category = Transaction.Category.RAW_MATERIAL
+            demo_category = self._demo_category(transaction.merchant_name)
+            if demo_category and not is_personal:
+                transaction.category = demo_category
                 transaction.classification_source = Transaction.ClassificationSource.AI
+                transaction.classification_confidence = Decimal("0.9500")
 
-            transaction.save(update_fields=["expense_purpose", "expense_purpose_source", "category", "classification_source", "updated_at"])
+            transaction.save(update_fields=[
+                "expense_purpose",
+                "expense_purpose_source",
+                "category",
+                "classification_source",
+                "classification_confidence",
+                "updated_at",
+            ])
 
             review = DeductionReviewService.get_or_create(transaction)
             DeductionReviewService.confirm(
@@ -154,39 +188,6 @@ class Command(BaseCommand):
                     else DeductionReview.ConfirmedStatus.DEDUCTIBLE
                 ),
             )
-
-        # 미분류(UNCLASSIFIED) 매입 거래를 GPT-5 모델로 일괄 AI 분류
-        from decimal import Decimal
-        from transactions.services.classifier import LLMTransactionClassifier
-
-        unclassified_txs = list(Transaction.objects.filter(
-            business=business,
-            transaction_type=Transaction.TransactionType.PURCHASE,
-            category=Transaction.Category.UNCLASSIFIED,
-        ))
-        if unclassified_txs:
-            items_to_classify = [
-                {
-                    "merchant_name": tx.merchant_name,
-                    "total_amount": int(tx.total_amount),
-                    "source": tx.source_type,
-                }
-                for tx in unclassified_txs
-            ]
-            ai_results = LLMTransactionClassifier.classify_batch(
-                items_to_classify,
-                business_type=business.business_type or "카페/음식점업",
-            )
-            for res in ai_results:
-                idx = res.get("index")
-                cat = res.get("category")
-                conf = res.get("confidence")
-                if idx is not None and idx < len(unclassified_txs) and cat and cat != Transaction.Category.UNCLASSIFIED:
-                    target_tx = unclassified_txs[idx]
-                    target_tx.category = cat
-                    target_tx.classification_source = Transaction.ClassificationSource.AI
-                    target_tx.classification_confidence = Decimal(str(conf)) if conf else None
-                    target_tx.save(update_fields=["category", "classification_source", "classification_confidence", "updated_at"])
 
         # 직원 3명 등록 (이도현, 박서연, 최우식)
         employee_specs = [
@@ -219,6 +220,27 @@ class Command(BaseCommand):
                         emp.monthly_contracted_hours,
                     )
 
+        # 3월~8월 성수동 커피·음료 상권 비교 데이터도 같은 값으로 복원한다.
+        for benchmark_month, spec in self.BENCHMARK_SPECS.items():
+            revenue, raw, labor, rent, supplies, profit = spec
+            IndustryBenchmark.objects.update_or_create(
+                region="성수동 상권",
+                business_type="커피-음료",
+                year_month=f"2026-{benchmark_month:02d}",
+                defaults={
+                    "raw_material_ratio": Decimal(raw),
+                    "labor_ratio": Decimal(labor),
+                    "rent_ratio": Decimal(rent),
+                    "supplies_ratio": Decimal(supplies),
+                    "operating_profit_ratio": Decimal(profit),
+                    "benchmark_monthly_revenue": revenue,
+                    "peak_time_ratio": Decimal("31.60"),
+                    "weekday_ratio": Decimal("62.30"),
+                    "weekend_ratio": Decimal("37.70"),
+                    "source": "SEOUL_OPEN_API_DEMO_SNAPSHOT",
+                },
+            )
+
         # 3월 ~ 7월 과거 월은 마감(CLOSED) 처리
         for m in range(3, 8):
             close = MonthlyClose.objects.filter(business=business, year=2026, month=m).first()
@@ -227,7 +249,7 @@ class Command(BaseCommand):
 
         # 마감된 가장 최근 월(7월) 정기 리포트 생성
         try:
-            report = generate_report(business.id, "2026-07")
+            generate_report(business.id, "2026-07")
         except Exception:
             pass
 
@@ -243,3 +265,13 @@ class Command(BaseCommand):
         self.stdout.write(f"transactions={Transaction.objects.filter(business=business).count()}")
         self.stdout.write(f"sales_summaries={MonthlySalesSummary.objects.filter(business=business).count()}")
         self.stdout.write(f"employees={Employee.objects.filter(business=business).count()}")
+        self.stdout.write(f"payments={Payment.objects.filter(employee__business=business).count()}")
+        self.stdout.write(f"monthly_closes={MonthlyClose.objects.filter(business=business).count()}")
+        self.stdout.write("demo_period=2026-03~2026-08 / 2026-08 OPEN")
+
+    @classmethod
+    def _demo_category(cls, merchant_name):
+        for category, keywords in cls.DEMO_CATEGORY_KEYWORDS:
+            if any(keyword in (merchant_name or "") for keyword in keywords):
+                return category
+        return None
