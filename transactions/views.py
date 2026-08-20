@@ -346,13 +346,20 @@ class TransactionExportView(APIView):
         }
 
         for tx in queryset:
-            # 부가세 공제 상태 결정 (개인 지출은 무조건 불공제)
+            # 부가세 공제 상태 세분화 (개인 지출은 불공제, 의제매입/일반매입 구분)
             if tx.expense_purpose == Transaction.ExpensePurpose.PERSONAL:
                 deduction_display = "불공제"
             elif hasattr(tx, "deduction_review") and tx.deduction_review and tx.deduction_review.confirmed_status:
                 rev_status = str(tx.deduction_review.confirmed_status)
                 if rev_status == "DEDUCTIBLE":
-                    deduction_display = "공제 대상"
+                    if (
+                        tx.transaction_type == Transaction.TransactionType.PURCHASE
+                        and tx.category == Transaction.Category.RAW_MATERIAL
+                        and tx.vat_amount == 0
+                    ):
+                        deduction_display = "의제매입"
+                    else:
+                        deduction_display = "일반 매입"
                 elif rev_status == "NON_DEDUCTIBLE":
                     deduction_display = "불공제"
                 else:
