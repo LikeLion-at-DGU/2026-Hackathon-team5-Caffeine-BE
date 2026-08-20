@@ -4,6 +4,7 @@ from benchmark.views import (
     BenchmarkCategoriesView,
     BenchmarkTrendView,
     BenchmarkAiDiagnosisRefreshView,
+    BenchmarkDeepDiagnosisView,
 )
 
 urlpatterns = [
@@ -11,4 +12,5 @@ urlpatterns = [
     path("categories/", BenchmarkCategoriesView.as_view(), name="benchmark-categories"),
     path("trend/", BenchmarkTrendView.as_view(), name="benchmark-trend"),
     path("ai-diagnosis/", BenchmarkAiDiagnosisRefreshView.as_view(), name="benchmark-ai-diagnosis-refresh"),
+    path("deep-diagnosis/", BenchmarkDeepDiagnosisView.as_view(), name="benchmark-deep-diagnosis"),
 ]
