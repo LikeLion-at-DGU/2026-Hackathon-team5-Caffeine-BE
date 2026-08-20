@@ -106,6 +106,8 @@ class RuleBasedChatResponder:
                 "intent": "WITHHOLDING_TAX",
                 "year_month": f"{year:04d}-{month:02d}",
                 "due_date": due_date_str,
+                "employee_count": employee_count,
+                "total_labor_cost": total_labor,
                 "withholding_tax": withholding_tax,
                 "sources": ["PAYROLL", "TAX_LAW"],
             },
@@ -294,10 +296,18 @@ class RuleBasedChatResponder:
             change_sentence += (
                 f" 가장 많이 증가한 지출 항목은 {summary['top_increasing_category']}입니다."
             )
+        if summary.get("profit_margin") is None:
+            profit_sentence = "매출이 없어 이익률은 계산할 수 없습니다."
+        else:
+            profit_sentence = (
+                f"추정 순이익은 {_won(summary['net_profit'])}, "
+                f"이익률은 {summary['profit_margin']:.1f}%입니다."
+            )
         return ChatReply(
             content=(
                 f"{year}년 {month}월 총 매출은 {_won(summary['total_sales'])}, "
-                f"총 지출은 {_won(summary['total_expense'])}입니다. {change_sentence}"
+                f"총 지출은 {_won(summary['total_expense'])}입니다. "
+                f"{profit_sentence} {change_sentence}"
             ),
             metadata={
                 "intent": "ANALYTICS",
@@ -307,9 +317,14 @@ class RuleBasedChatResponder:
                 "summary": {
                     "total_sales": summary["total_sales"],
                     "total_expense": summary["total_expense"],
+                    "net_profit": summary["net_profit"],
+                    "profit_margin": summary.get("profit_margin"),
                     "sales_change_rate": summary.get("sales_change_rate"),
                     "expense_change_rate": summary.get("expense_change_rate"),
                     "top_increasing_category": summary.get("top_increasing_category"),
+                    "expense_breakdown": summary.get("expense_breakdown", []),
+                    "payroll_withholding_tax": summary.get("payroll_withholding_tax", 0),
+                    "payroll_employee_count": summary.get("payroll_employee_count", 0),
                 },
             },
         )

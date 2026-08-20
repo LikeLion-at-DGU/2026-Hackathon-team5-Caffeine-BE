@@ -127,7 +127,7 @@ class OpenAIChatResponder:
 
 질문 처리 원칙:
 1. 메뉴 아이디어, 홍보, 고객 응대, 매장 운영, 일상 대화 등 일반 질문은 모델의 일반 지식을 활용해 자유롭게 도와주세요. 카페 서비스 범위 밖이라는 이유로 거절하지 마세요.
-2. 사용자의 매출, 매입, 거래, 공제 현황 등 이 사업장 고유의 사실과 숫자는 오직 SERVICE_CONTEXT JSON에 있는 값만 사용하세요. 없으면 확인할 자료가 없다고 분명히 말하고 숫자를 추측하지 마세요.
+2. 사용자의 매출, 매입, 거래, 공제, 인건비, 급여, 손익 등 이 사업장 고유의 사실과 숫자는 오직 SERVICE_CONTEXT JSON에 있는 값만 사용하세요. 없으면 확인할 자료가 없다고 분명히 말하고 숫자를 추측하지 마세요.
 3. 세법, 공제 요건, 신고기한, 법령 해석처럼 최신성이 필요한 세무 질문은 반드시 web_search를 사용하세요. 검색 결과 중 법령정보센터·국세청·기획재정부의 공식 자료만 근거로 삼으세요.
 4. 세무 답변은 '한줄 결론 → 적용 조건 → 법령·공식 근거 → 확인할 점' 순서로 쉽게 설명하세요. 가능하면 법령명·조문 또는 해석 문서명을 밝히고 출처 인용을 유지하되, 전체를 한국어 약 1,000자 안팎으로 간결하게 마무리하세요.
 5. 공식 해석도 개별 사실관계에 따라 달라질 수 있음을 알리고, 최종 신고 판단이 필요한 사안은 세무 전문가 또는 관할 세무서 확인을 권하세요. 겁을 주는 상투적 면책문구는 반복하지 마세요.
@@ -142,6 +142,7 @@ class OpenAIChatResponder:
             "deductions": self.fallback._deduction_reply,
             "vat": self.fallback._vat_reply,
             "analytics": self.fallback._analytics_reply,
+            "payroll": self.fallback._withholding_tax_reply,
         }
         for name, builder in builders.items():
             try:
@@ -210,6 +211,10 @@ class OpenAIChatResponder:
                 "id": business.id,
                 "name": business.business_name,
                 "tax_type": business.tax_type,
+                "business_status": business.business_status,
+                "industry_code": business.industry_code,
+                "business_type": business.business_type,
+                "business_item": business.business_item,
             },
             "CHAT_HISTORY": history,
             "SERVICE_CONTEXT": service_context,

@@ -7,6 +7,8 @@ from django.test import TestCase, override_settings
 from businesses.models import Business
 from chat.models import ChatMessage
 from chat.services.openai_responder import OFFICIAL_TAX_DOMAINS, OpenAIChatResponder
+from payroll.models import Employee, Payment
+from payroll.services import payment_service
 
 
 @override_settings(
@@ -25,6 +27,20 @@ class OpenAIChatResponderTests(TestCase):
         )
 
     def test_reply_supplies_service_context_history_and_official_search(self):
+        employee = Employee.objects.create(
+            business=self.business,
+            name="장예은",
+            employment_type="FULL_TIME",
+            hourly_wage=12000,
+        )
+        Payment.objects.create(
+            employee=employee,
+            year=2026,
+            month=8,
+            work_hours=100,
+            gross_pay=1_200_000,
+            withholding_tax=12_000,
+        )
         ChatMessage.objects.create(
             business=self.business,
             role=ChatMessage.Role.USER,
@@ -64,6 +80,11 @@ class OpenAIChatResponderTests(TestCase):
         self.assertEqual(context["BUSINESS"]["id"], self.business.id)
         self.assertNotIn("business_number", context["BUSINESS"])
         self.assertIn("transactions", context["SERVICE_CONTEXT"])
+        self.assertIn("payroll", context["SERVICE_CONTEXT"])
+        payroll_facts = context["SERVICE_CONTEXT"]["payroll"]["facts"]
+        self.assertEqual(payroll_facts["employee_count"], 1)
+        self.assertGreater(payroll_facts["total_labor_cost"], 1_200_000)
+        self.assertEqual(payroll_facts["withholding_tax"], 12_000)
         self.assertEqual(len(context["CHAT_HISTORY"]), 2)
 
     def test_first_turn_requests_friendly_cafe_assistant_greeting(self):
@@ -83,6 +104,85 @@ class OpenAIChatResponderTests(TestCase):
 
         instructions = client.responses.create.call_args.kwargs["instructions"]
         self.assertIn("안녕하세요! 카페비서예요 ☕", instructions)
+
+    def test_payroll_context_reads_latest_database_values_on_every_reply(self):
+        employee = Employee.objects.create(
+            business=self.business,
+            name="박서연",
+            employment_type="PART_TIME",
+            hourly_wage=10_000,
+            is_long_term_contract=True,
+        )
+        payment = payment_service.create_payment(
+            self.business.id,
+            employee.id,
+            2026,
+            8,
+            80,
+        )
+        client = Mock()
+        client.responses.create.return_value = SimpleNamespace(
+            output_text="인건비를 확인했어요.",
+            output=[],
+            usage=None,
+        )
+        responder = OpenAIChatResponder(client=client)
+
+        responder.reply(
+            business=self.business,
+            message="이번 달 인건비 얼마야?",
+            year=2026,
+            month=8,
+        )
+        first_context = json.loads(client.responses.create.call_args.kwargs["input"])
+        first_payroll = first_context["SERVICE_CONTEXT"]["payroll"]["facts"]
+
+        employee.hourly_wage = 12_000
+        employee.save(update_fields=["hourly_wage"])
+        payment_service.update_payment(self.business.id, payment.id, 80)
+
+        responder.reply(
+            business=self.business,
+            message="수정된 인건비 다시 알려줘",
+            year=2026,
+            month=8,
+        )
+        second_context = json.loads(client.responses.create.call_args.kwargs["input"])
+        second_payroll = second_context["SERVICE_CONTEXT"]["payroll"]["facts"]
+
+        new_employee = Employee.objects.create(
+            business=self.business,
+            name="신규직원",
+            employment_type="FULL_TIME",
+            hourly_wage=11_000,
+        )
+        payment_service.create_payment(
+            self.business.id,
+            new_employee.id,
+            2026,
+            8,
+            40,
+        )
+        responder.reply(
+            business=self.business,
+            message="새 직원까지 포함한 인건비 알려줘",
+            year=2026,
+            month=8,
+        )
+        third_context = json.loads(client.responses.create.call_args.kwargs["input"])
+        third_payroll = third_context["SERVICE_CONTEXT"]["payroll"]["facts"]
+
+        self.assertEqual(first_payroll["employee_count"], 1)
+        self.assertEqual(second_payroll["employee_count"], 1)
+        self.assertGreater(
+            second_payroll["total_labor_cost"],
+            first_payroll["total_labor_cost"],
+        )
+        self.assertEqual(third_payroll["employee_count"], 2)
+        self.assertGreater(
+            third_payroll["total_labor_cost"],
+            second_payroll["total_labor_cost"],
+        )
 
     def test_official_citations_are_exposed_and_appended_as_links(self):
         client = Mock()

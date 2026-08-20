@@ -190,11 +190,12 @@ class Command(BaseCommand):
 
         # 직원 3명 등록 (이도현, 박서연, 최우식)
         employee_specs = [
-            ("이도현", "FULL_TIME", 11500, 160),
-            ("박서연", "PART_TIME", 10200, 80),
-            ("최우식", "FREELANCER", 15000, 40),
+            ("이도현", "FULL_TIME", 11500, 160, False),
+            # 3월~8월 계속 근무하는 데모 단시간 근로자로 고용보험 적용 대상이다.
+            ("박서연", "PART_TIME", 10200, 80, True),
+            ("최우식", "FREELANCER", 15000, 40, False),
         ]
-        for name, employment_type, hourly_wage, work_hours in employee_specs:
+        for name, employment_type, hourly_wage, work_hours, is_long_term_contract in employee_specs:
             Employee.objects.update_or_create(
                 business=business,
                 name=name,
@@ -202,6 +203,7 @@ class Command(BaseCommand):
                     "employment_type": employment_type,
                     "hourly_wage": hourly_wage,
                     "monthly_contracted_hours": work_hours,
+                    "is_long_term_contract": is_long_term_contract,
                 },
             )
 
