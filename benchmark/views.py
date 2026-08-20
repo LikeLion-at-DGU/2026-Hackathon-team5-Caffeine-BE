@@ -1,32 +1,16 @@
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework import status
 from core.responses import success_response, error_response
+from core.permissions import get_user_business
 from businesses.models import Business
 from benchmark.serializers import BenchmarkQuerySerializer, BenchmarkRefreshSerializer
 from benchmark.services.benchmark_service import BenchmarkService
 
 
-def _get_business_or_error(request, business_id: int):
-    if not request.user or not request.user.is_authenticated:
-        return None, error_response(
-            code="UNAUTHORIZED",
-            message="인증 자격 증명이 제공되지 않았습니다.",
-            status=status.HTTP_401_UNAUTHORIZED,
-        )
-    business = Business.objects.filter(pk=business_id).first()
-    if not business:
-        return None, error_response(
-            code="BUSINESS_NOT_FOUND",
-            message="사업장을 찾을 수 없습니다.",
-            status=status.HTTP_404_NOT_FOUND,
-        )
-    if business.owner_id is not None and business.owner_id != request.user.id:
-        return None, error_response(
-            code="FORBIDDEN_BUSINESS_ACCESS",
-            message="해당 사업장에 대한 접근 권한이 없습니다.",
-            status=status.HTTP_403_FORBIDDEN,
-        )
-    return business, None
+def _get_business_or_error(request, business_id):
+    """core.permissions.get_user_business 위임 — IDOR 검증 로직 단일화."""
+    return get_user_business(request, business_id)
 
 
 class BenchmarkDashboardView(APIView):
@@ -128,6 +112,10 @@ class BenchmarkTrendView(APIView):
 
 class BenchmarkAiDiagnosisRefreshView(APIView):
     """AI 경영 진단 새로고침 (OpenAI 강제 재실행)."""
+    # 유료 LLM 호출 남용 방어
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "llm"
+
 
     def post(self, request, business_id):
         business, err = _get_business_or_error(request, business_id)
@@ -157,6 +145,10 @@ class BenchmarkAiDiagnosisRefreshView(APIView):
 
 class BenchmarkDeepDiagnosisView(APIView):
     """8월 경영 종합 진단 리포트 (모달 팝업 전용 심층 진단 데이터)."""
+    # 유료 LLM 호출 남용 방어
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "llm"
+
 
     def get(self, request, business_id):
         business, err = _get_business_or_error(request, business_id)

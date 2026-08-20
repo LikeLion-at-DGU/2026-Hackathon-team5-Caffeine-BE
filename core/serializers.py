@@ -1,5 +1,7 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from businesses.models import Business
 
@@ -24,13 +26,21 @@ class LoginSerializer(serializers.Serializer):
 
 class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(required=True, min_length=3, max_length=150)
-    password = serializers.CharField(required=True, min_length=4, write_only=True)
+    password = serializers.CharField(required=True, min_length=8, write_only=True)
     business_name = serializers.CharField(required=False, default="카페비서 1호점", max_length=100)
     representative_name = serializers.CharField(required=False, default="대표자", max_length=50)
 
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():
             raise serializers.ValidationError("이미 존재하는 아이디입니다.")
+        return value
+
+    def validate_password(self, value):
+        # Django 기본 검증기(길이/흔한 비밀번호/숫자만 등)를 통과시킨다.
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
         return value
 
     def create(self, validated_data):

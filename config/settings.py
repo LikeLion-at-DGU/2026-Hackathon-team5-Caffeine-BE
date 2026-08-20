@@ -201,15 +201,43 @@ SEOUL_DATA_TIMEOUT_SECONDS = float(os.environ.get("SEOUL_DATA_TIMEOUT_SECONDS", 
 
 PAYMENT_GATEWAY_MODE = "mock"
 
+# ---------------------------------------------------------------------------
+# 인증 / 인가 정책
+# ---------------------------------------------------------------------------
+# 데모 시연 모드. Authorization 헤더가 없는 요청을 데모 계정으로 인증하며,
+# 그렇게 인증된 요청은 is_demo=True 사업장에만 접근할 수 있다(core.permissions).
+# 실서비스 전환 시 .env에 DEMO_MODE=0 을 설정한다.
+DEMO_MODE = os.environ.get("DEMO_MODE", "True").strip().lower() in (
+    "true",
+    "1",
+    "yes",
+    "y",
+)
+DEMO_USERNAME = os.environ.get("DEMO_USERNAME", "demo").strip()
+
+# 소유자(owner)가 지정되지 않은 사업장에 대한 접근 허용 여부.
+# 레거시 테스트 픽스처 호환용이며, 배포 런타임에서는 반드시 False여야 한다.
+ALLOW_UNOWNED_BUSINESS_ACCESS = "test" in sys.argv
+
+TEST_RUNNER = "core.test_runner.LegacyAuthTestRunner"
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
+        # DEMO_MODE=True일 때만 동작한다. 순서상 반드시 Token 뒤에 온다.
+        "core.authentication.DemoGuestAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
+    "DEFAULT_THROTTLE_RATES": {
+        # 로그인 무차별 시도 방어
+        "login": "10/min",
+        # 유료 LLM 호출 남용 방어 (데모 모드에서는 무인증 호출이 가능하므로 필수)
+        "llm": "20/min",
+    },
 }
 
 SPECTACULAR_SETTINGS = {

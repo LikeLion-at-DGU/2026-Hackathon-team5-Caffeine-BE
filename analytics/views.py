@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.responses import error_response, success_response
+from core.permissions import check_business
 from analytics.exceptions import AnalyticsServiceError
 from analytics.serializers import (
     AnalyticsExportQuerySerializer,
@@ -28,26 +29,8 @@ def _error_response(code: str, message: str, http_status: int, errors: dict | No
 
 
 def _business_error(request, business_id):
-    if not request.user or not request.user.is_authenticated:
-        return _error_response(
-            "UNAUTHORIZED",
-            "인증 자격 증명이 제공되지 않았습니다.",
-            status.HTTP_401_UNAUTHORIZED,
-        )
-    business = Business.objects.filter(pk=business_id).first()
-    if not business:
-        return _error_response(
-            "BUSINESS_NOT_FOUND",
-            "사업장을 찾을 수 없습니다.",
-            status.HTTP_404_NOT_FOUND,
-        )
-    if business.owner_id is not None and business.owner_id != request.user.id:
-        return _error_response(
-            "FORBIDDEN_BUSINESS_ACCESS",
-            "해당 사업장에 대한 접근 권한이 없습니다.",
-            status.HTTP_403_FORBIDDEN,
-        )
-    return None
+    """core.permissions.check_business 위임 — IDOR 검증 로직 단일화."""
+    return check_business(request, business_id)
 
 
 def _resolve_business_id(request, business_id=None):
@@ -124,9 +107,14 @@ class DeductionBreakdownView(APIView):
 
 
 class MonthlyCloseView(APIView):
-    def post(self, request, business_id):
-        if error := _business_error(request, business_id):
+    def post(self, request, business_id=None):
+        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
+        # query param에서 business_id를 복원한다. 없으면 400.
+        business_id, error = _resolve_business_id(request, business_id)
+        if error:
             return error
+        if b_error := _business_error(request, business_id):
+            return b_error
         serializer = AnalyticsPeriodQuerySerializer(data=request.data)
         if not serializer.is_valid():
             return _error_response(
@@ -152,9 +140,14 @@ class MonthlyCloseView(APIView):
 
 
 class CostRatioView(APIView):
-    def get(self, request, business_id):
-        if error := _business_error(request, business_id):
+    def get(self, request, business_id=None):
+        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
+        # query param에서 business_id를 복원한다. 없으면 400.
+        business_id, error = _resolve_business_id(request, business_id)
+        if error:
             return error
+        if b_error := _business_error(request, business_id):
+            return b_error
         query = CostRatioQuerySerializer(data=request.query_params)
         if not query.is_valid():
             return _error_response(
@@ -169,9 +162,14 @@ class CostRatioView(APIView):
 
 
 class CategoryTrendView(APIView):
-    def get(self, request, business_id):
-        if error := _business_error(request, business_id):
+    def get(self, request, business_id=None):
+        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
+        # query param에서 business_id를 복원한다. 없으면 400.
+        business_id, error = _resolve_business_id(request, business_id)
+        if error:
             return error
+        if b_error := _business_error(request, business_id):
+            return b_error
         query = TrendQuerySerializer(data=request.query_params)
         if not query.is_valid():
             return _error_response(
@@ -186,9 +184,14 @@ class CategoryTrendView(APIView):
         
 
 class ProfitTrendView(APIView):
-    def get(self, request, business_id):
-        if error := _business_error(request, business_id):
+    def get(self, request, business_id=None):
+        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
+        # query param에서 business_id를 복원한다. 없으면 400.
+        business_id, error = _resolve_business_id(request, business_id)
+        if error:
             return error
+        if b_error := _business_error(request, business_id):
+            return b_error
 
         query = ProfitTrendQuerySerializer(data=request.query_params)
 
@@ -211,9 +214,14 @@ class ProfitTrendView(APIView):
 
 
 class AnalyticsSummaryView(APIView):
-    def get(self, request, business_id):
-        if error := _business_error(request, business_id):
+    def get(self, request, business_id=None):
+        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
+        # query param에서 business_id를 복원한다. 없으면 400.
+        business_id, error = _resolve_business_id(request, business_id)
+        if error:
             return error
+        if b_error := _business_error(request, business_id):
+            return b_error
         query = AnalyticsPeriodQuerySerializer(data=request.query_params)
         if not query.is_valid():
             return _error_response(
@@ -229,9 +237,14 @@ class AnalyticsSummaryView(APIView):
 
 
 class AnalyticsExportView(APIView):
-    def get(self, request, business_id):
-        if error := _business_error(request, business_id):
+    def get(self, request, business_id=None):
+        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
+        # query param에서 business_id를 복원한다. 없으면 400.
+        business_id, error = _resolve_business_id(request, business_id)
+        if error:
             return error
+        if b_error := _business_error(request, business_id):
+            return b_error
         query = AnalyticsExportQuerySerializer(data=request.query_params)
         if not query.is_valid():
             return _error_response(

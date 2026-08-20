@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 
 from .models import Transaction, TransactionDuplicate
 from core.responses import error_response, success_response
+from core.permissions import check_business_owner
 from .serializers import (
     DuplicateListQuerySerializer,
     DuplicateResolutionSerializer,
@@ -53,19 +54,8 @@ def _paginated_data(
 
 
 def _check_business_owner(request, business):
-    if not request.user or not request.user.is_authenticated:
-        return error_response(
-            code="UNAUTHORIZED",
-            message="인증 자격 증명이 제공되지 않았습니다.",
-            status=401,
-        )
-    if business.owner_id is not None and business.owner_id != request.user.id:
-        return error_response(
-            code="FORBIDDEN_BUSINESS_ACCESS",
-            message="해당 사업장에 대한 접근 권한이 없습니다.",
-            status=403,
-        )
-    return None
+    """core.permissions.check_business_owner 위임 — IDOR 검증 로직 단일화."""
+    return check_business_owner(request, business)
 
 
 def _business_scope(request):
