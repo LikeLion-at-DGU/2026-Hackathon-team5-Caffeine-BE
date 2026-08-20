@@ -52,7 +52,7 @@ class AIDiagnosisHistory(models.Model):
     year_month = models.CharField(max_length=7, help_text="진단 대상 연월 (YYYY-MM)")
 
     score = models.IntegerField(default=85, help_text="종합 경영 건강도 점수 (0~100)")
-    grade_label = models.CharField(max_length=100, default="양호 — 상위 18% 매장", help_text="등급 라벨")
+    grade_label = models.CharField(max_length=100, default="분석 중...", help_text="등급 라벨")
 
     # 피그마 디자인 100% 매칭 구조화 JSON
     prescriptions = models.JSONField(default=list, help_text="AI 비서의 한 줄 처방 3가지")

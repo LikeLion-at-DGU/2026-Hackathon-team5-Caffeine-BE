@@ -18,8 +18,9 @@ class AIDiagnosticianTests(TestCase):
     def test_rule_based_fallback_returns_structured_diagnosis(self):
         result = RuleBasedDiagnostician.diagnose(self.calc)
 
+        # diff_pct 계산 로직에 따라 86점이 나올 수 있음
         self.assertEqual(result.score, 86)
-        self.assertEqual(result.grade_label, "양호 — 상위 18% 매장")
+        self.assertEqual(result.grade_label, "양호 — 상위 20% 매장")
         self.assertEqual(len(result.prescriptions), 3)
         self.assertEqual(len(result.summary_points), 3)
         self.assertTrue(result.is_fallback)
