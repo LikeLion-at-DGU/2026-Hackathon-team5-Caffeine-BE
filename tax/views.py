@@ -45,7 +45,7 @@ def _period_query_data(request):
 
 
 def _check_tax_business_owner(request, business):
-    """core.permissions.check_business_owner 위임 — IDOR 검증 로직 단일화."""
+    """공통 사업장 권한 검사로 위임한다."""
     return check_business_owner(request, business)
 
 
@@ -297,7 +297,7 @@ class MonthlyCloseApproveView(APIView):
 
 
 class MonthlyCloseReopenView(APIView):
-    """마감된 월을 해제하여 지출 내역 분류 및 검토를 다시 진행할 수 있도록 재오픈한다."""
+    """마감 기록을 제거해 해당 월의 분류와 공제 검토를 다시 허용한다."""
 
     def post(self, request, year_month):
         query = BusinessPeriodQuerySerializer(

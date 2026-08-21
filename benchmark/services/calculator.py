@@ -56,18 +56,18 @@ class BenchmarkCalculationResult:
 
 
 class BenchmarkCalculator:
-    """내 매장의 실제 장부 데이터(거래/매출/급여)와 상권 표준 벤치마크를 정밀 비교 계산한다."""
+    """사업장의 거래·매출·급여를 같은 기간의 상권 지표와 비교한다."""
 
     @staticmethod
     def _to_pct(val, base):
-        """base가 0 이하이면 0.0을 반환해 ZeroDivisionError를 방지한다."""
+        """비교 기준이 없을 때 0으로 처리해 비율 계산을 안정화한다."""
         if base is None or base <= 0:
             return 0.0
         return float((val / base * 100).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
 
     @staticmethod
     def _get_or_create_benchmark(year_month_str: str) -> IndustryBenchmark:
-        """해당 연월의 상권 벤치마크 지표 조회 (없을 경우 현실적인 기본값으로 생성)."""
+        """해당 월의 상권 지표를 조회하고 없으면 데모 기본값을 생성한다."""
         benchmark = IndustryBenchmark.objects.filter(year_month=year_month_str).first()
         if not benchmark:
             benchmark = IndustryBenchmark.objects.create(
@@ -86,13 +86,13 @@ class BenchmarkCalculator:
 
     @staticmethod
     def _shift_month(year: int, month: int, delta: int):
-        """year-month 기준으로 delta개월 이동한 (year, month)를 반환한다."""
+        """연도 경계를 포함해 지정한 개월 수만큼 이동한다."""
         total = year * 12 + (month - 1) + delta
         return total // 12, total % 12 + 1
 
     @classmethod
     def _calculate_month_metrics(cls, business: Business, year: int, month: int) -> dict:
-        """특정 월의 매출/카테고리별 지출을 실제 장부 데이터 기반으로 집계한다."""
+        """특정 월의 실제 장부에서 매출과 지출 비율을 집계한다."""
         start_date, end_date = month_range(year, month)
         transactions = effective_transactions(
             business=business,
@@ -100,8 +100,7 @@ class BenchmarkCalculator:
             end_date=end_date,
         )
 
-        # 카드 월매출 집계와 현금영수증/세금계산서 건별 매출은 서로 다른
-        # 매출 채널이므로 Analytics와 동일하게 합산한다.
+        # 서로 다른 매출 채널인 카드 집계와 건별 증빙 매출을 함께 반영한다.
         sales_summary = MonthlySalesSummary.objects.filter(
             business=business,
             year=year,
@@ -114,22 +113,18 @@ class BenchmarkCalculator:
 
         total_revenue = sales_summary + tx_sales
 
-        # 경영분석 비용은 대시보드와 동일하게 취소/확정중복/개인지출을
-        # 제외한 사업 지출만 사용한다.
+        # 대시보드와 금액이 어긋나지 않도록 유효한 사업 지출만 사용한다.
         purchases = transactions.filter(
             transaction_type=Transaction.TransactionType.PURCHASE,
             expense_purpose=Transaction.ExpensePurpose.BUSINESS,
         )
 
-        # 식자재·원두
         raw_mat_sum = purchases.filter(
             category=Transaction.Category.RAW_MATERIAL
         ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
-        # 포장재·소모품
         supplies_sum = purchases.filter(
             category=Transaction.Category.SUPPLIES
         ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
-        # 임차료·관리비
         rent_sum = purchases.filter(
             category__in=[Transaction.Category.RENT, Transaction.Category.UTILITIES]
         ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
@@ -154,7 +149,7 @@ class BenchmarkCalculator:
 
     @staticmethod
     def _calculate_vat_deduction_estimate(business: Business, year: int, month: int) -> int:
-        """이번 달 예상 부가세 매입세액 공제액.
+        """해당 월의 예상 매입세액 공제액을 반환한다.
 
         VatForecastService는 일반과세자(GENERAL)만 지원하므로, 그 외 과세유형이거나
         계산에 필요한 데이터가 없어 실패하는 경우 0으로 안전하게 폴백한다.
@@ -171,7 +166,7 @@ class BenchmarkCalculator:
     def calculate(cls, business: Business, year: int, month: int) -> BenchmarkCalculationResult:
         year_month_str = f"{year:04d}-{month:02d}"
 
-        # 1. 상권 벤치마크 지표 + 이번 달 실제 장부 데이터 집계
+        # 상권과 사업장 지표를 같은 연월 기준으로 맞춘다.
         benchmark = cls._get_or_create_benchmark(year_month_str)
         metrics = cls._calculate_month_metrics(business, year, month)
 
@@ -187,7 +182,7 @@ class BenchmarkCalculator:
         bm_rent = float(benchmark.rent_ratio)
         bm_supplies = float(benchmark.supplies_ratio)
 
-        # 2. 카테고리별 비교 목록 구성
+        # 화면에서 비교할 비용 항목을 동일한 단위로 구성한다.
         diff_raw = round(my_raw_mat_pct - bm_raw_mat, 1)
         diff_labor = round(my_labor_pct - bm_labor, 1)
         diff_rent = round(my_rent_pct - bm_rent, 1)
@@ -232,14 +227,14 @@ class BenchmarkCalculator:
             ),
         ]
 
-        # 3. 월별 6개월치(이번 달 포함 직전 5개월 ~ 이번 달) 실적 추이를 실제 장부 데이터로 생성
+        # 현재 월을 포함한 6개월 추이를 실제 장부로 생성한다.
         monthly_trends = []
         for delta in range(-5, 1):
             t_year, t_month = cls._shift_month(year, month, delta)
             t_year_month_str = f"{t_year:04d}-{t_month:02d}"
 
             if delta == 0:
-                # 이번 달은 이미 위에서 계산한 값을 재사용해 중복 쿼리를 피한다.
+                # 현재 월은 앞서 계산한 결과를 재사용한다.
                 t_metrics = metrics
                 t_benchmark = benchmark
             else:
@@ -265,18 +260,18 @@ class BenchmarkCalculator:
                 )
             )
 
-        # 전월 대비 영업이익률 개선폭 (실제 추이 마지막 두 달 차이)
+        # 최근 두 달의 실제 이익률 차이로 전월 대비 개선폭을 계산한다.
         mom_profit_improvement = (
             round(monthly_trends[-1].my_profit_ratio - monthly_trends[-2].my_profit_ratio, 1)
             if len(monthly_trends) >= 2
             else 0.0
         )
 
-        # 상권 대비 매출 차이 (%)
+        # 상권 평균 매출과의 차이를 비율로 비교한다.
         bm_rev = float(benchmark.benchmark_monthly_revenue)
         rev_diff_pct = round(((float(total_revenue) - bm_rev) / bm_rev) * 100, 1) if bm_rev else 0.0
 
-        # 4. 예상 부가세 매입세액 공제액 (일반과세자가 아니면 0으로 폴백)
+        # 지원하지 않는 과세유형은 공제 추정치를 0으로 유지한다.
         vat_deduction_estimate = cls._calculate_vat_deduction_estimate(business, year, month)
 
         return BenchmarkCalculationResult(

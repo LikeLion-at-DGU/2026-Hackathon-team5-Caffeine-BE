@@ -43,10 +43,10 @@ class NoPendingTwoWayAuthError(ValueError):
 
 
 class CodefTwoWayRequired(Exception):
-    """거래 조회 중 CODEF 2-way 추가인증이 필요한 경우 사용한다.
+    """CODEF 거래 조회에 추가인증이 필요함을 알리는 내부 제어 예외.
 
-    atomic 블록 밖으로 예외를 전달해 기존 저장 내용을 롤백한 뒤,
-    인증 재개에 필요한 정보만 CodefConnection에 별도로 저장한다.
+    저장 도중 추가인증이 발생하면 현재 트랜잭션을 롤백하고, 재개에 필요한
+    정보만 별도로 저장하기 위해 사용한다.
     """
 
     def __init__(
@@ -79,14 +79,13 @@ class CodefTwoWayRequired(Exception):
         )
 
 
-# Transaction Sync의 카카오 2-way 인증은 HOMETAX 연결을 사용한다.
+# 거래 추가인증은 홈택스 연결 상태에 저장한다.
 _HOMETAX_CONNECTION_TYPE = "HOMETAX"
 
-# CODEF simpleAuth 승인 완료 값
+# CODEF 명세의 간편인증 승인 완료 값.
 _SIMPLE_AUTH_OK = "1"
 
-# 카카오 2-way 인증이 발생할 수 있는 거래 소스.
-# 신용카드 매출자료는 공동인증서 기반이므로 제외한다.
+# 공동인증서 기반 신용카드 매출자료는 카카오 추가인증 대상에서 제외한다.
 _HOMETAX_DEPENDENT_SOURCES = {
     Transaction.SourceType.CARD_PURCHASE,
     Transaction.SourceType.CASH_RECEIPT_SALE,
@@ -111,9 +110,7 @@ class TransactionSyncService:
         self.classifier = RuleBasedTransactionClassifier()
         self.duplicate_detector = DuplicateDetector()
 
-    # ==================================================
     # 최초 동기화
-    # ==================================================
 
     def sync(
         self,
@@ -122,7 +119,7 @@ class TransactionSyncService:
         end_date,
         sources,
     ):
-        """거래 소스를 조회하고 정상 응답만 DB에 저장한다.
+        """거래 소스를 조회하고 검증을 통과한 결과만 저장한다.
 
         2-way 인증이 필요한 경우 현재 atomic 작업을 롤백하고,
         인증 재개에 필요한 pending 정보만 별도로 저장한다.
@@ -143,7 +140,7 @@ class TransactionSyncService:
                 )
 
         except CodefTwoWayRequired as exc:
-            # atomic 롤백 완료 후 pending 정보만 새로 저장
+            # 거래 저장은 롤백하고 인증 재개 정보만 별도 트랜잭션으로 남긴다.
             self._save_pending_two_way(
                 business,
                 exc,
@@ -161,7 +158,7 @@ class TransactionSyncService:
         end_date,
         sources,
     ):
-        """전체 Transaction Sync 저장 작업을 하나의 transaction으로 처리한다."""
+        """여러 거래 소스의 저장을 하나의 원자적 작업으로 처리한다."""
 
         total_created = 0
         total_updated = 0
@@ -186,8 +183,7 @@ class TransactionSyncService:
                     str(exc)
                 ) from exc
 
-            # 신용카드 매출자료는 Transaction이 아닌
-            # MonthlySalesSummary로 별도 저장한다.
+            # 건별 내역이 없는 카드 매출자료는 월 집계 모델에 저장한다.
             if (
                 source
                 == MonthlySalesSummary.SourceType.CREDIT_CARD_SALES_SUMMARY
@@ -337,12 +333,10 @@ class TransactionSyncService:
                 dict(category_counts),
         }
 
-    # ==================================================
-    # 카카오 2-way 인증 완료 후 재시도
-    # ==================================================
+    # 카카오 추가인증 완료 후 재시도
 
     def retry(self, business):
-        """저장된 pending 정보를 사용해 2-way 거래 조회를 재개한다."""
+        """저장된 대기 정보로 추가인증이 중단시킨 거래 조회를 재개한다."""
 
         conn = CodefConnection.objects.filter(
             business=business,
@@ -386,8 +380,7 @@ class TransactionSyncService:
                 )
 
         except CodefTwoWayRequired as exc:
-            # 재요청 후 다시 추가인증이 필요한 경우
-            # 새로운 2-way 정보로 pending 상태를 갱신한다.
+            # 연속 추가인증에도 대응할 수 있도록 대기 정보를 최신 값으로 교체한다.
             self._save_pending_two_way(
                 business,
                 exc,
@@ -413,7 +406,7 @@ class TransactionSyncService:
         end_date,
         two_way_info,
     ):
-        """pending 거래를 2-way 정보와 함께 재조회하고 저장한다."""
+        """대기 중인 거래를 추가인증 정보와 함께 다시 조회해 저장한다."""
 
         normalized_items = self._fetch_and_normalize(
             source,
@@ -528,9 +521,7 @@ class TransactionSyncService:
                 dict(category_counts),
         }
 
-    # ==================================================
-    # 신용카드 매출자료
-    # ==================================================
+    # 신용카드 월 매출자료
 
     def _sync_credit_card_sales_summaries(
         self,
@@ -538,7 +529,7 @@ class TransactionSyncService:
         start_date,
         end_date,
     ):
-        """공동인증서 기반 신용카드 월별 매출자료를 저장한다.
+        """공동인증서 기반 신용카드 월 매출자료를 저장한다.
 
         이 상품은 카카오 2-way 인증 대상이 아니다.
         """
@@ -621,9 +612,7 @@ class TransactionSyncService:
             },
         }
 
-    # ==================================================
-    # Provider 조회 및 2-way 감지
-    # ==================================================
+    # 제공자 조회 및 추가인증 감지
 
     def _fetch_and_normalize(
         self,
@@ -636,7 +625,7 @@ class TransactionSyncService:
         two_way_info=None,
         simple_auth=None,
     ):
-        """거래 원본을 조회하고 source별 normalizer를 적용한다.
+        """거래 원본을 조회하고 소스별 정규화 함수를 적용한다.
 
         resume_operation이 지정된 경우 해당 거래 요청에만
         2-way 재요청 정보를 전달한다.
@@ -660,9 +649,7 @@ class TransactionSyncService:
                 "simple_auth": None,
             }
 
-        # --------------------------------------------------
         # 사업용 신용카드 매입
-        # --------------------------------------------------
 
         if source == Transaction.SourceType.CARD_PURCHASE:
             payload = (
@@ -687,9 +674,7 @@ class TransactionSyncService:
                 payload
             )
 
-        # --------------------------------------------------
         # 현금영수증 매출
-        # --------------------------------------------------
 
         if (
             source
@@ -717,13 +702,10 @@ class TransactionSyncService:
                 payload
             )
 
-        # --------------------------------------------------
         # 전자세금계산서
-        # --------------------------------------------------
 
         if source == Transaction.SourceType.TAX_INVOICE:
-            # 매입부터 조회한다.
-            # 매입에서 추가인증이 발생하면 매출은 호출하지 않는다.
+            # 매입 인증이 끝나기 전에 매출 조회가 앞서지 않도록 순차 처리한다.
             purchases = (
                 self.provider
                 .get_tax_invoice_purchases(
@@ -750,7 +732,6 @@ class TransactionSyncService:
                 end_date=end_date,
             )
 
-            # 매입 조회가 완료된 경우에만 매출을 조회한다.
             sales = (
                 self.provider
                 .get_tax_invoice_sales(
@@ -806,7 +787,7 @@ class TransactionSyncService:
         start_date,
         end_date,
     ):
-        """CODEF 응답이 추가인증 상태이면 내부 제어 예외를 발생시킨다."""
+        """추가인증 응답을 원자적 저장을 중단하는 내부 예외로 변환한다."""
 
         if not is_two_way_required(raw):
             return
@@ -826,19 +807,16 @@ class TransactionSyncService:
             raw=raw,
         )
 
-    # ==================================================
-    # 2-way pending 상태 관리
-    # ==================================================
+    # 추가인증 대기 상태 관리
 
     @staticmethod
     def _ensure_no_pending_two_way(
         business,
         sources,
     ):
-        """진행 중인 HOMETAX 2-way가 있으면 새 거래 조회를 막는다."""
+        """진행 중인 홈택스 추가인증과 새 거래 조회가 겹치지 않게 한다."""
 
-        # 공동인증서 상품만 요청한 경우에는
-        # HOMETAX pending 상태와 무관하게 실행할 수 있다.
+        # 공동인증서 상품은 홈택스 추가인증 상태와 무관하게 조회할 수 있다.
         if not any(
             source in _HOMETAX_DEPENDENT_SOURCES
             for source in sources
@@ -869,7 +847,7 @@ class TransactionSyncService:
         business,
         exc,
     ):
-        """CODEF 2-way 정보와 재개할 거래 요청 정보를 저장한다."""
+        """추가인증 정보와 중단된 거래 요청을 함께 저장한다."""
 
         conn, _ = (
             CodefConnection.objects.get_or_create(
@@ -926,7 +904,7 @@ class TransactionSyncService:
     def _clear_pending_two_way(
         business,
     ):
-        """2-way 인증 완료 후 pending 상태를 초기화한다."""
+        """추가인증 완료 후 재사용할 수 없는 대기 정보를 정리한다."""
 
         conn = (
             CodefConnection.objects.filter(
@@ -965,7 +943,7 @@ class TransactionSyncService:
         business,
         exc,
     ):
-        """프론트에 반환할 추가인증 대기 응답을 생성한다."""
+        """프론트가 인증 절차를 이어갈 수 있는 대기 응답을 만든다."""
 
         return {
             "outcome": "AUTH_REQUIRED",
@@ -988,16 +966,14 @@ class TransactionSyncService:
             ),
         }
 
-    # ==================================================
     # 공통 검증 및 후처리
-    # ==================================================
 
     @staticmethod
     def _validate_business_ownership(
         business,
         normalized_items,
     ):
-        """조회된 거래가 요청 사업자의 데이터인지 검증한다."""
+        """다른 사업자의 거래가 섞이지 않도록 원본 사업자번호를 검증한다."""
 
         expected = normalized_business_number(
             business.business_number
@@ -1027,7 +1003,7 @@ class TransactionSyncService:
         transaction,
         normalized,
     ):
-        """사용자 분류가 없는 거래에 규칙 기반 분류 결과를 적용한다."""
+        """사용자가 확정하지 않은 거래에만 자동 분류 결과를 적용한다."""
 
         if (
             transaction.classification_source

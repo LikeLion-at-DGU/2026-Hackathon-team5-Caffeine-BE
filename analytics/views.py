@@ -29,7 +29,7 @@ def _error_response(code: str, message: str, http_status: int, errors: dict | No
 
 
 def _business_error(request, business_id):
-    """core.permissions.check_business 위임 — IDOR 검증 로직 단일화."""
+    """공통 사업장 권한 검사로 위임한다."""
     return check_business(request, business_id)
 
 
@@ -108,8 +108,7 @@ class DeductionBreakdownView(APIView):
 
 class MonthlyCloseView(APIView):
     def post(self, request, business_id=None):
-        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
-        # query param에서 business_id를 복원한다. 없으면 400.
+        # 사업장 경로가 없는 공용 URL에서는 쿼리의 사업장 ID를 사용한다.
         business_id, error = _resolve_business_id(request, business_id)
         if error:
             return error
@@ -141,8 +140,7 @@ class MonthlyCloseView(APIView):
 
 class CostRatioView(APIView):
     def get(self, request, business_id=None):
-        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
-        # query param에서 business_id를 복원한다. 없으면 400.
+        # 사업장 경로가 없는 공용 URL에서는 쿼리의 사업장 ID를 사용한다.
         business_id, error = _resolve_business_id(request, business_id)
         if error:
             return error
@@ -163,8 +161,7 @@ class CostRatioView(APIView):
 
 class CategoryTrendView(APIView):
     def get(self, request, business_id=None):
-        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
-        # query param에서 business_id를 복원한다. 없으면 400.
+        # 사업장 경로가 없는 공용 URL에서는 쿼리의 사업장 ID를 사용한다.
         business_id, error = _resolve_business_id(request, business_id)
         if error:
             return error
@@ -185,8 +182,7 @@ class CategoryTrendView(APIView):
 
 class ProfitTrendView(APIView):
     def get(self, request, business_id=None):
-        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
-        # query param에서 business_id를 복원한다. 없으면 400.
+        # 사업장 경로가 없는 공용 URL에서는 쿼리의 사업장 ID를 사용한다.
         business_id, error = _resolve_business_id(request, business_id)
         if error:
             return error
@@ -215,8 +211,7 @@ class ProfitTrendView(APIView):
 
 class AnalyticsSummaryView(APIView):
     def get(self, request, business_id=None):
-        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
-        # query param에서 business_id를 복원한다. 없으면 400.
+        # 사업장 경로가 없는 공용 URL에서는 쿼리의 사업장 ID를 사용한다.
         business_id, error = _resolve_business_id(request, business_id)
         if error:
             return error
@@ -238,8 +233,7 @@ class AnalyticsSummaryView(APIView):
 
 class AnalyticsExportView(APIView):
     def get(self, request, business_id=None):
-        # /api/analytics/... (business_id 없는 경로)로도 라우팅되므로
-        # query param에서 business_id를 복원한다. 없으면 400.
+        # 사업장 경로가 없는 공용 URL에서는 쿼리의 사업장 ID를 사용한다.
         business_id, error = _resolve_business_id(request, business_id)
         if error:
             return error

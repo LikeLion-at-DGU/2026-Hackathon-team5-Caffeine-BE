@@ -10,7 +10,7 @@ class InvalidAuthRequestError(Exception):
 
 
 def _reset_two_way(conn):
-    """2-way 인증에 사용한 임시 정보를 초기화한다."""
+    """완료되거나 실패한 추가인증 정보를 연결 상태에서 제거한다."""
     conn.continue_2way = False
     conn.method = ""
     conn.job_index = None
@@ -53,7 +53,7 @@ class CodefAuthService:
             conn.last_error_message = ""
 
         else:
-            # 인증이 완료되면 연결 상태를 저장하고 2-way 정보를 정리한다.
+            # 완료된 인증 정보가 다음 연결 요청에 재사용되지 않도록 정리한다.
             conn.connected_id = result.get("connected_id", "")
             conn.status = "CONNECTED"
             conn.last_error_code = ""
@@ -68,7 +68,7 @@ class CodefAuthService:
         }
 
     def retry(self, business, connection_type):
-        # 재시도는 추가인증이 필요한 HOMETAX 연결에서만 허용한다.
+        # 추가인증을 지원하는 홈택스 연결만 재시도를 허용한다.
         if connection_type != "HOMETAX":
             raise InvalidAuthRequestError(
                 "재시도는 HOMETAX 연결에만 사용할 수 있습니다."
@@ -92,7 +92,7 @@ class CodefAuthService:
             _reset_two_way(conn)
 
         elif result["outcome"] == "AUTH_REQUIRED":
-            # 추가인증이 계속 필요한 경우 갱신된 2-way 정보를 반영한다.
+            # 다음 재시도에 필요한 최신 추가인증 정보를 보존한다.
             conn.status = "AUTH_REQUIRED"
             conn.continue_2way = True
 
@@ -106,7 +106,7 @@ class CodefAuthService:
                 conn.jti = result["jti"]
 
         else:
-            # 재시도 실패 시 2-way 임시 정보를 정리한다.
+            # 실패한 인증 정보가 다시 사용되지 않도록 정리한다.
             conn.status = "FAILED"
             conn.last_error_code = result.get("error_code", "")
             conn.last_error_message = result.get("error_message", "")
@@ -120,7 +120,7 @@ class CodefAuthService:
         }
 
     def status(self, business):
-        # 연결 이력이 없는 유형도 DISCONNECTED 상태로 포함한다.
+        # 프론트가 고정된 연결 목록을 그릴 수 있도록 미연결 유형도 포함한다.
         existing = {
             c.connection_type: c.status
             for c in CodefConnection.objects.filter(business=business)

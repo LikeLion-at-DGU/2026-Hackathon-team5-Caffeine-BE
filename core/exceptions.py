@@ -13,7 +13,7 @@ ERROR_DEFAULTS = {
 
 
 def custom_exception_handler(exc, context):
-    """Normalize only DRF-handled exceptions without guessing a domain resource."""
+    """DRF가 처리한 예외만 서비스의 공통 오류 형식으로 변환한다."""
     response = drf_exception_handler(exc, context)
     if response is None:
         return None

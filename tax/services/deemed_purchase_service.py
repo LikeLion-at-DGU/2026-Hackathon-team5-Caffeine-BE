@@ -34,7 +34,7 @@ def _is_food_service_business(business) -> bool:
 
 
 def estimate_deemed_purchase_deduction(*, business, candidate_amount, year: int) -> DeemedPurchaseEstimate:
-    """면세 원재료 후보액에 대한 의제매입세액을 보수적으로 추정한다.
+    """면세 원재료 후보액으로 의제매입세액 추정치를 계산한다.
 
     현재 Business 모델에는 개인/법인 구분과 과세기간 과세표준 누계가 없다.
     따라서 2026년 음식점업 데모에 적용되는 9/109 특례율로 *추정액*만 계산하고,
@@ -63,8 +63,7 @@ def estimate_deemed_purchase_deduction(*, business, candidate_amount, year: int)
             ],
         )
 
-    # 먼저 나눈 근사 Decimal을 곱하면 109,000원이 8,999원으로 잘릴 수 있다.
-    # 분자 곱셈 후 분모로 나눠 법정 분수율을 그대로 유지한다.
+    # 중간 소수 오차로 원 단위가 줄지 않도록 분자를 먼저 곱한 뒤 나눈다.
     deduction = (amount * SPECIAL_RATE_NUMERATOR / SPECIAL_RATE_DENOMINATOR).quantize(
         Decimal("1"), rounding=ROUND_DOWN
     )

@@ -15,7 +15,7 @@ class Command(BaseCommand):
         year_month = options["year_month"]
         self.stdout.write(f"[BENCHMARK] [{year_month}] 상권 벤치마크 데이터 생성 시작...")
 
-        # 1. 성수동 상권 (피그마 기본 상권)
+        # 데모 사업장과 비교할 기본 성수동 상권을 준비한다.
         benchmark, created = IndustryBenchmark.objects.update_or_create(
             region="성수동 상권",
             business_type="커피-음료",
@@ -37,7 +37,7 @@ class Command(BaseCommand):
         )
         self.stdout.write(self.style.SUCCESS(f"[SUCCESS] 성수동 상권 벤치마크 생성 완료: {benchmark}"))
 
-        # 2. 실시간 서울시 OpenAPI 조회 (옵션)
+        # 요청한 경우에만 서울시 최신 데이터를 덧붙인다.
         if options["fetch_live"]:
             try:
                 client = SeoulCommercialClient()

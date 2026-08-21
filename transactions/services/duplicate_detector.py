@@ -6,7 +6,7 @@ from ..models import Transaction, TransactionDuplicate
 
 
 class DuplicateDetector:
-    """서로 다른 source에서 들어온 동일 비용 후보를 보수적으로 찾는다."""
+    """서로 다른 수집 경로에서 들어온 동일 지출 후보를 보수적으로 찾는다."""
 
     BUSINESS_NUMBER_CONFIDENCE = Decimal("0.9500")
     MERCHANT_NAME_CONFIDENCE = Decimal("0.8000")

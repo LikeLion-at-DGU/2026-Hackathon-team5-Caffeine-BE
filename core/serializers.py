@@ -36,7 +36,7 @@ class RegisterSerializer(serializers.Serializer):
         return value
 
     def validate_password(self, value):
-        # Django 기본 검증기(길이/흔한 비밀번호/숫자만 등)를 통과시킨다.
+        # 프로젝트 설정의 비밀번호 보안 규칙을 회원가입에도 동일하게 적용한다.
         try:
             validate_password(value)
         except DjangoValidationError as exc:
@@ -48,7 +48,7 @@ class RegisterSerializer(serializers.Serializer):
             username=validated_data["username"],
             password=validated_data["password"],
         )
-        # 가입 즉시 기본 사업장 생성 및 유저 매핑
+        # 가입 직후 API를 사용할 수 있도록 기본 사업장과 소유권을 함께 만든다.
         business = Business.objects.create(
             owner=user,
             business_name=validated_data.get("business_name", "카페비서 1호점"),

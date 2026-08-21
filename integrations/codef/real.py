@@ -16,11 +16,10 @@ from .client import (
 
 
 class RealCodefProvider(BaseCodefProvider):
-    """실제 CODEF API 연동 Provider."""
+    """실제 CODEF 상품 API를 호출하는 제공자."""
 
     SOURCE_CONNECTION_TYPES = {
-        # 현재 Real 연동에서 사용하는 사업용카드 매입 API는
-        # 홈택스(현금영수증 사업용 신용카드 매입세액 조회) 상품이다.
+        # 사업용카드 매입은 홈택스 상품이므로 홈택스 연결 상태를 확인한다.
         "CARD_PURCHASE": "HOMETAX",
         "CASH_RECEIPT_PURCHASE": "HOMETAX",
         "CASH_RECEIPT_SALE": "HOMETAX",
@@ -28,35 +27,27 @@ class RealCodefProvider(BaseCodefProvider):
         "CREDIT_CARD_SALES_SUMMARY": "HOMETAX",
     }
 
-    # --------------------------------------------------
     # 사업자등록상태
-    # --------------------------------------------------
 
     BUSINESS_STATUS_ORGANIZATION = "0004"
     BUSINESS_STATUS_PATH = "/v1/kr/public/nt/business/status"
     BUSINESS_STATUS_SUCCESS_CODE = "CF-00000"
 
-    # --------------------------------------------------
     # 현금영수증 매출
-    # --------------------------------------------------
 
     CASH_RECEIPT_SALES_ORGANIZATION = "0003"
     CASH_RECEIPT_SALES_PATH = (
         "/v1/kr/public/nt/cash-receipt/sales-details"
     )
 
-    # --------------------------------------------------
     # 전자세금계산서 통합
-    # --------------------------------------------------
 
     TAX_INVOICE_ORGANIZATION = "0002"
     TAX_INVOICE_PATH = (
         "/v1/kr/public/nt/tax-invoice/integrated-check-list"
     )
 
-    # --------------------------------------------------
     # 사업용 신용카드 매입
-    # --------------------------------------------------
 
     BUSINESS_CARD_PURCHASE_ORGANIZATION = "0003"
     BUSINESS_CARD_PURCHASE_PATH = (
@@ -64,9 +55,7 @@ class RealCodefProvider(BaseCodefProvider):
         "deduction-of-business-credit-card-purchase-amount"
     )
 
-    # --------------------------------------------------
     # 신용카드 매출자료
-    # --------------------------------------------------
 
     CREDIT_CARD_SALES_ORGANIZATION = "0006"
     CREDIT_CARD_SALES_PATH = (
@@ -74,18 +63,14 @@ class RealCodefProvider(BaseCodefProvider):
         "credit-card-sales-data-list"
     )
 
-    # --------------------------------------------------
     # 공통
-    # --------------------------------------------------
 
     SUCCESS_CODE = "CF-00000"
 
     def __init__(self, client=None):
         self.client = client or CodefClient()
 
-    # ==================================================
-    # 공통 Helper
-    # ==================================================
+    # 공통 변환
 
     @staticmethod
     def _digits(value):
@@ -121,7 +106,7 @@ class RealCodefProvider(BaseCodefProvider):
 
         text = cls._digits(value)
 
-        # YYYYMMDD가 들어와도 앞 6자리 사용
+        # 일 단위 값도 월 조회에 사용할 수 있도록 연월만 취한다.
         if len(text) == 8:
             text = text[:6]
 
@@ -181,12 +166,10 @@ class RealCodefProvider(BaseCodefProvider):
 
     @staticmethod
     def _read_base64_file(file_path, label):
-        """로컬 인증서 파일을 읽어 Base64 문자열로 변환한다.
+        """인증서 파일을 CODEF 전송 형식인 Base64 문자열로 변환한다.
 
-        CODEF_PROBE_CERT_FILE / CODEF_PROBE_KEY_FILE은 인증서 파일
-        "경로"를 가리킨다. (.env에 인코딩된 문자열을 직접 붙여넣지 않는다.
-        인증서가 갱신될 때 파일 경로는 그대로 두고 파일만 교체하면 되도록
-        하기 위함이다.)
+        환경변수에는 인증서 본문 대신 경로만 저장해 인증서 교체와 비밀값 관리를
+        분리한다.
         """
 
         if not file_path:
@@ -211,7 +194,7 @@ class RealCodefProvider(BaseCodefProvider):
         return base64.b64encode(raw_bytes).decode("ascii")
 
     def _get_credit_card_sales_certificate_fields(self):
-        """신용카드 매출자료 조회용 공동인증서 필드를 조립한다.
+        """신용카드 매출자료 요청에 필요한 공동인증서 필드를 구성한다.
 
         CODEF 명세상 이 상품은 간편인증 loginType을 사용하지 않고
         certFile / certPassword / certType을 직접 받는다.
@@ -274,7 +257,7 @@ class RealCodefProvider(BaseCodefProvider):
                 "keyFile",
             )
 
-        # CODEF 문서상 선택 입력값. 필요한 경우에만 전송한다.
+        # 비어 있는 선택값은 전송하지 않아 상품별 검증 오류를 피한다.
         optional_env_fields = {
             "deptUserId": "CODEF_PROBE_DEPT_USER_ID",
             "deptUserPass": "CODEF_PROBE_DEPT_USER_PASS",
@@ -298,13 +281,12 @@ class RealCodefProvider(BaseCodefProvider):
         two_way_info=None,
         simple_auth=None,
     ):
-        """CODEF 거래 조회의 1차 요청 또는 2-way 재요청을 수행한다.
+        """CODEF 거래의 최초 요청과 추가인증 재요청을 같은 경로로 처리한다.
 
         two_way_info와 simple_auth가 전달되면 기존 payload에
         simpleAuth / is2Way / twoWayInfo를 추가해 동일 endpoint로 재요청한다.
 
-        CODEF 2-way는 별도의 인증 API를 호출하는 방식이 아니라,
-        인증이 발생한 거래 상품을 동일 endpoint로 다시 요청하는 구조다.
+        CODEF 추가인증은 별도 인증 API가 아니라 기존 상품을 다시 호출하는 방식이다.
         """
 
         if two_way_info is not None and simple_auth is not None:
@@ -322,13 +304,11 @@ class RealCodefProvider(BaseCodefProvider):
         *,
         include_identity=True,
     ):
-        """홈택스 카카오 간편인증 입력값을 조립한다.
+        """홈택스 카카오 간편인증에 필요한 입력값을 구성한다.
 
         userName / phoneNo / loginIdentity는 로컬 환경변수에서 가져온다.
 
-        identity는 별도 환경변수보다 Business.business_number를 우선한다.
-        즉 실제 조회 대상 사업자번호와 payload의 사업자번호가 어긋나는 것을
-        방지한다.
+        조회 대상과 인증 대상이 어긋나지 않도록 DB의 사업자번호를 우선한다.
         """
 
         user_name = os.environ.get(
@@ -381,8 +361,7 @@ class RealCodefProvider(BaseCodefProvider):
                 business.business_number
             )
 
-            # DB 사업자번호가 없을 경우에만
-            # 기존 probe 환경변수를 fallback으로 사용한다.
+            # DB 값이 없는 진단 명령에서만 환경변수 사업자번호를 사용한다.
             if not business_number:
                 business_number = self._digits(
                     os.environ.get(
@@ -396,9 +375,7 @@ class RealCodefProvider(BaseCodefProvider):
 
         return fields
 
-    # ==================================================
     # CODEF 연결 상태 확인
-    # ==================================================
 
     def ensure_business_access(
         self,
@@ -427,9 +404,7 @@ class RealCodefProvider(BaseCodefProvider):
                 f"{connection_type} CODEF 계정이 없습니다."
             )
 
-    # ==================================================
     # 사업자등록상태
-    # ==================================================
 
     def get_business_status(
         self,
@@ -486,7 +461,7 @@ class RealCodefProvider(BaseCodefProvider):
             "",
         )
 
-        # 전체 요청 실패
+        # 상품 데이터가 있어도 최상위 요청이 실패하면 성공으로 처리하지 않는다.
         if (
             top_code
             != cls.BUSINESS_STATUS_SUCCESS_CODE
@@ -598,9 +573,7 @@ class RealCodefProvider(BaseCodefProvider):
                 ),
         }
 
-    # ==================================================
     # 기존 CODEF 연결 인증
-    # ==================================================
 
     def request_auth(
         self,
@@ -628,9 +601,7 @@ class RealCodefProvider(BaseCodefProvider):
             "아직 별도 구현되지 않았습니다."
         )
 
-    # ==================================================
     # 사업자 등록사항
-    # ==================================================
 
     def get_business_registration_info(self, business):
         """사업자 등록사항 및 담당자 안내 Real 연동은 추후 구현한다."""
@@ -638,9 +609,7 @@ class RealCodefProvider(BaseCodefProvider):
             "사업자 등록사항 Real CODEF 연동은 아직 구현되지 않았습니다."
         )
 
-    # ==================================================
     # 사업용 신용카드 매입
-    # ==================================================
 
     def get_business_card_purchases(
         self,
@@ -682,27 +651,27 @@ class RealCodefProvider(BaseCodefProvider):
             "organization":
                 self.BUSINESS_CARD_PURCHASE_ORGANIZATION,
 
-            # 회원 간편인증
+            # CODEF 회원 간편인증 코드
             "loginType": "5",
 
-            # 카카오톡
+            # 카카오톡 인증 코드
             "loginTypeLevel": "1",
 
             **auth_fields,
 
-            # 월별 조회
+            # 월별 조회 코드
             "searchType": "1",
 
-            # YYYYMM
+            # 월별 조회 형식
             "startDate":
                 self._format_yyyymm(
                     start_date
                 ),
 
-            # 전체
+            # 공제 여부 전체 조회
             "inquiryType": "0",
 
-            # 카드정보 포함
+            # 카드 상세정보 포함
             "detailYN": "1",
         }
 
@@ -713,9 +682,7 @@ class RealCodefProvider(BaseCodefProvider):
             simple_auth=simple_auth,
         )
 
-    # ==================================================
     # 현금영수증 매출
-    # ==================================================
 
     def get_cash_receipt_sales(
         self,
@@ -743,10 +710,10 @@ class RealCodefProvider(BaseCodefProvider):
             "organization":
                 self.CASH_RECEIPT_SALES_ORGANIZATION,
 
-            # 회원 간편인증
+            # CODEF 회원 간편인증 코드
             "loginType": "5",
 
-            # 카카오톡
+            # 카카오톡 인증 코드
             "loginTypeLevel": "1",
 
             **auth_fields,
@@ -761,8 +728,7 @@ class RealCodefProvider(BaseCodefProvider):
                     end_date
                 ),
 
-            # CODEF 실호출에서 명시하지 않으면
-            # CF-12411 / SEQ_ORDER 문제가 발생했던 값
+            # 응답 순서 오류를 피하기 위해 정렬 방향을 명시한다.
             "orderBy": "0",
         }
 
@@ -773,9 +739,7 @@ class RealCodefProvider(BaseCodefProvider):
             simple_auth=simple_auth,
         )
 
-    # ==================================================
     # 전자세금계산서 매입
-    # ==================================================
 
     def get_tax_invoice_purchases(
         self,
@@ -804,10 +768,10 @@ class RealCodefProvider(BaseCodefProvider):
             "organization":
                 self.TAX_INVOICE_ORGANIZATION,
 
-            # 회원 간편인증
+            # CODEF 회원 간편인증 코드
             "loginType": "5",
 
-            # 카카오톡
+            # 카카오톡 인증 코드
             "loginTypeLevel": "1",
 
             **auth_fields,
@@ -852,9 +816,7 @@ class RealCodefProvider(BaseCodefProvider):
             simple_auth=simple_auth,
         )
 
-    # ==================================================
     # 전자세금계산서 매출
-    # ==================================================
 
     def get_tax_invoice_sales(
         self,
@@ -883,10 +845,10 @@ class RealCodefProvider(BaseCodefProvider):
             "organization":
                 self.TAX_INVOICE_ORGANIZATION,
 
-            # 회원 간편인증
+            # CODEF 회원 간편인증 코드
             "loginType": "5",
 
-            # 카카오톡
+            # 카카오톡 인증 코드
             "loginTypeLevel": "1",
 
             **auth_fields,
@@ -931,9 +893,7 @@ class RealCodefProvider(BaseCodefProvider):
             simple_auth=simple_auth,
         )
 
-    # ==================================================
     # 신용카드 매출자료
-    # ==================================================
 
     def get_credit_card_sales_summary(
         self,
@@ -952,8 +912,7 @@ class RealCodefProvider(BaseCodefProvider):
         카카오 간편인증 상품이 아니므로 Transaction Sync의
         2-way 추가인증 흐름을 사용하지 않는다.
 
-        API 입력에 사업자번호(identity)가 없어 business는
-        Provider 인터페이스 호환을 위해서만 전달받는다.
+        이 상품은 요청값에 사업자번호가 없어 `business`를 연결 검증에만 사용한다.
         """
 
         start_year = self._format_year(start_date)

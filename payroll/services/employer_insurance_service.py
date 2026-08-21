@@ -1,7 +1,4 @@
-"""사업주 부담 4대보험료 계산.
-
-세부 요율/가정은 payroll/services/insurance_common.py 참고.
-"""
+"""사업주가 별도로 부담하는 4대보험료를 계산한다."""
 
 from payroll.services.industrial_accident_rates import get_industrial_accident_rate
 from payroll.services.insurance_common import (
@@ -34,19 +31,16 @@ def calculate_employment_insurance_employer(gross_pay: int) -> int:
 
 
 def calculate_industrial_accident_employer(gross_pay: int, business) -> int:
-    """사업종류별 산재보험료율(Business 기반 동적 매핑) + 전 업종 공통 출퇴근재해요율."""
+    """사업장별 산재 요율과 공통 출퇴근재해 요율을 적용한다."""
     rate = get_industrial_accident_rate(business) + COMMUTE_ACCIDENT_RATE
     return round(gross_pay * rate)
 
 
 def calculate_employer_insurance_total(employee, gross_pay: int) -> int:
-    """직원 고용형태·계약조건에 따른 사업주 부담 4대보험료 합계.
+    """고용 형태와 계약 조건에 맞는 사업주 부담 보험료를 계산한다.
 
-    PART_TIME: 산재보험은 항상 포함. 고용보험은 근로계약이 3개월 이상(또는 무기한)으로
-    등록된 경우에만 포함 — '실제 경과시간'이 아니라 '계약 조건' 기준 (2026-08-14 수정).
-    법적 근거: 고용보험법 시행령 제3조 관련 유권해석 — "3개월 이상 계속근로"는 실근무기간이
-    아니라 근로계약 기간을 기준으로 판단하며, 요건 충족 시 최초 근무일부터 소급 적용됨.
-    국민연금(월소득 220만원 이상 시 가입)·건강보험(월 60시간 이상 시 가입) 조건은 미구현.
+    단시간 근로자의 고용보험은 실제 경과 기간이 아니라 등록된 계약 기간을 기준으로
+    적용한다. 산재보험은 계약 기간과 관계없이 사업주 부담에 포함한다.
     """
     if employee.employment_type == "FREELANCER":
         return 0

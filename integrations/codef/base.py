@@ -6,11 +6,7 @@ class CodefBusinessAccessError(ValueError):
 
 
 class BaseCodefProvider(ABC):
-    """CODEF 연동 Provider의 공통 인터페이스.
-
-    Service는 Mock/Real 구현을 구분하지 않고 이 인터페이스를 통해
-    CODEF 인증 및 거래 조회 기능을 사용한다.
-    """
+    """목업과 실제 CODEF 제공자가 공유하는 조회 인터페이스."""
 
     @abstractmethod
     def ensure_business_access(self, business, source_type):
@@ -53,7 +49,7 @@ class BaseCodefProvider(ABC):
 
     @abstractmethod
     def request_auth(self, business, connection_type):
-        """기존 CODEF 연결 인증 요청 인터페이스.
+        """기존 CODEF 연결 인증을 요청한다.
 
         Transaction Sync 과정에서 발생하는 2-way 추가인증과는 별도로
         기존 codef-auth API에서 사용한다.
@@ -62,7 +58,7 @@ class BaseCodefProvider(ABC):
 
     @abstractmethod
     def retry_auth(self, business, connection):
-        """기존 CODEF 연결 인증 재시도 인터페이스."""
+        """추가인증이 필요한 기존 CODEF 연결을 재시도한다."""
         raise NotImplementedError
 
     @abstractmethod

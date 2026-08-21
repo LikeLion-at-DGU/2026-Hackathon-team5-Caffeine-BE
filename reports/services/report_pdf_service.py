@@ -32,21 +32,21 @@ from .data_aggregation_service import (
     get_sales_invoices,
 )
 
-# payroll/fonts의 나눔고딕 등록 (한글 지원)
+# 서버 환경에서도 한글이 깨지지 않도록 급여 앱의 폰트를 재사용한다.
 _FONT_DIR = Path(apps.get_app_config("payroll").path) / "fonts"
 pdfmetrics.registerFont(TTFont("NanumGothic", str(_FONT_DIR / "NanumGothic.ttf")))
 FONT_NAME = "NanumGothic"
 
 
 class NumberedCanvas(object):
-    """2-Pass 방식으로 전체 페이지 수(Page X of Y)를 하단에 출력하는 Canvas 래퍼."""
+    """두 번 렌더링해 각 페이지에 전체 페이지 수를 표시한다."""
 
     def __init__(self, *args, **kwargs):
         pass
 
 
 def _fmt_amt(value):
-    """금액을 천 단위 콤마와 '원' 표기로 변환."""
+    """금액을 천 단위 구분이 있는 원화 문자열로 변환한다."""
     if value is None:
         return "0원"
     try:
@@ -57,7 +57,7 @@ def _fmt_amt(value):
 
 
 def _fmt_date(d):
-    """날짜 포맷 통일 (YYYY-MM-DD)."""
+    """날짜를 `YYYY-MM-DD` 형식으로 통일한다."""
     if isinstance(d, date):
         return d.strftime("%Y-%m-%d")
     return str(d) if d else ""
@@ -74,7 +74,7 @@ def _get_source_label(source_type):
 
 
 def generate_report_pdf(business, year_month):
-    """실제 세무사에게 월별 기장자료로 바로 전달할 수 있는 표준 회계 양식 PDF를 생성합니다."""
+    """세무사에게 전달할 월별 기장자료 PDF를 생성한다."""
     buffer = io.BytesIO()
 
     doc = SimpleDocTemplate(
@@ -88,7 +88,7 @@ def generate_report_pdf(business, year_month):
 
     styles = getSampleStyleSheet()
 
-    # 스타일 정의
+    # 문서 전체에서 같은 글꼴과 간격을 사용하도록 스타일을 공유한다.
     title_style = ParagraphStyle(
         "DocTitle",
         fontName=FONT_NAME,

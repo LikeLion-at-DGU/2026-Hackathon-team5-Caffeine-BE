@@ -1,15 +1,21 @@
-"""사업장 기본정보 조회/수정.
+"""설정 화면에서 사용하는 사업장 기본 정보 조회·수정 서비스.
 
-2026-08-16: representative_name이 businesses.Business에 정식 필드로 추가되면서
-(PR #18), settings 자체 임시 테이블(BusinessProfile)은 더 이상 쓰지 않음.
-이제 businesses.Business를 그대로 읽고 쓴다 — settings는 businesses의 데이터를
-감싸서 보여주는 역할만 함.
+사업장 정보의 원본은 `businesses.Business`로 유지하고, 이 모듈은 설정 화면에
+필요한 필드만 전달한다.
 """
 
 from businesses.models import Business
 
 
 def get_business_info(business_id: int) -> dict:
+    """설정 화면에 표시할 사업장 정보를 반환한다.
+
+    Args:
+        business_id: 조회할 사업장 ID.
+
+    Returns:
+        설정 화면에서 사용하는 사업장 정보.
+    """
     business = Business.objects.get(id=business_id)  # 없으면 Business.DoesNotExist
 
     return {
@@ -20,14 +26,22 @@ def get_business_info(business_id: int) -> dict:
         "business_number": business.business_number,
         "tax_type": business.tax_type,
         "industry_code": business.industry_code,
-        # "업종명"으로 합치지 않고 원본 값 그대로 내려준다 - 합치는 로직(" · " 조인)은
-        # 이미 두 번이나 버그가 났던 자리라, 표시 방식은 프론트(BusinessInfoForm)에 맡긴다
+        # 업태와 종목은 의미가 달라 화면에서 필요한 방식으로 조합하도록 분리한다.
         "business_type": business.business_type,
         "business_item": business.business_item,
     }
 
 
 def update_business_info(business_id: int, validated_data: dict) -> dict:
+    """검증된 값으로 사업장 정보를 갱신한다.
+
+    Args:
+        business_id: 수정할 사업장 ID.
+        validated_data: 저장할 검증 완료 필드.
+
+    Returns:
+        갱신된 사업장 정보.
+    """
     business = Business.objects.get(id=business_id)
 
     for field, value in validated_data.items():

@@ -16,7 +16,7 @@ class ClassificationResult:
 
 
 class RuleBasedTransactionClassifier:
-    """거래처 업종·종목과 세금계산서 품목에만 근거한 보수적 분류기."""
+    """근거가 분명한 거래처와 품목만 자동 분류한다."""
 
     KEYWORDS = {
         Transaction.Category.RAW_MATERIAL: (
@@ -111,7 +111,7 @@ class RuleBasedTransactionClassifier:
 
 
 class LLMTransactionClassifier:
-    """OpenAI GPT-5 계열을 활용한 지출 품목 맥락 추론 분류기."""
+    """미분류 지출의 맥락을 OpenAI 모델로 보완한다."""
 
     SYSTEM_PROMPT = """당신은 대한민국 소상공인(카페/음식점업)을 위한 전문 세무 회계 AI입니다.
 주어진 거래처 상호명, 거래 금액, 수집 출처 정보를 바탕으로 카페 운영 지출 카테고리를 정확하게 분류하세요.
@@ -142,7 +142,7 @@ class LLMTransactionClassifier:
 
     @classmethod
     def classify_batch(cls, items: list[dict], business_type: str = "카페/음식점업") -> list[dict]:
-        """미분류 거래 목록을 GPT-5 모델로 일괄 분류하여 결과를 반환합니다."""
+        """미분류 거래를 한 번의 요청으로 분류해 입력 순서대로 반환한다."""
         if not items:
             return []
 

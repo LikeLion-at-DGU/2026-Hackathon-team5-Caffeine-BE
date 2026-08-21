@@ -56,7 +56,7 @@ class EmployeeListItemSerializer(serializers.ModelSerializer):
             "is_long_term_contract",
             "status",
         ]
-        # rrn_front는 절대 포함하지 않음 — 민감정보 노출 방지 (2026-08-13 결정)
+        # 주민등록번호 앞자리는 목록 응답에서 제외해 노출 범위를 제한한다.
 
 
 
@@ -100,7 +100,7 @@ class PaymentListItemSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def _breakdown(payment):
-        # 한 급여 건을 직렬화할 때 같은 계산을 여러 필드에서 반복하지 않는다.
+        # 한 응답 안에서 동일한 급여 계산을 반복하지 않도록 결과를 재사용한다.
         if not hasattr(payment, "_payslip_data_cache"):
             payment._payslip_data_cache = get_payslip_data(payment)
         return payment._payslip_data_cache

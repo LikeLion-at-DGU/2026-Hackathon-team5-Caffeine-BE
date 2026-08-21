@@ -54,5 +54,5 @@ class ProfitTrendQuerySerializer(serializers.Serializer):
 
 
 class AnalyticsExportQuerySerializer(AnalyticsPeriodQuerySerializer):
-    # DRF가 GET 쿼리의 `format`을 렌더러 선택 예약어로 사용하므로 별도 이름을 쓴다.
+    # DRF의 렌더러 예약어 `format`과 충돌하지 않도록 별도 이름을 사용한다.
     file_type = serializers.ChoiceField(choices=["csv", "pdf"], default="csv")

@@ -9,12 +9,12 @@ from benchmark.services.benchmark_service import BenchmarkService
 
 
 def _get_business_or_error(request, business_id):
-    """core.permissions.get_user_business 위임 — IDOR 검증 로직 단일화."""
+    """공통 사업장 조회와 권한 검사로 위임한다."""
     return get_user_business(request, business_id)
 
 
 class BenchmarkDashboardView(APIView):
-    """AI 벤치마크 종합 대시보드 조회 (처방, 도넛점수, 바차트, 라인차트 통합)."""
+    """상권 비교와 AI 진단을 포함한 경영 대시보드를 조회한다."""
 
     def get(self, request, business_id):
         business, err = _get_business_or_error(request, business_id)
@@ -43,7 +43,7 @@ class BenchmarkDashboardView(APIView):
 
 
 class BenchmarkCategoriesView(APIView):
-    """카테고리별 비용 비교 단독 조회 (바 차트용)."""
+    """비용 항목별 사업장·상권 비율을 조회한다."""
 
     def get(self, request, business_id):
         business, err = _get_business_or_error(request, business_id)
@@ -77,7 +77,7 @@ class BenchmarkCategoriesView(APIView):
 
 
 class BenchmarkTrendView(APIView):
-    """월별 벤치마크 추이 단독 조회 (라인 차트용)."""
+    """월별 사업장·상권 지표 추이를 조회한다."""
 
     def get(self, request, business_id):
         business, err = _get_business_or_error(request, business_id)
@@ -111,8 +111,8 @@ class BenchmarkTrendView(APIView):
 
 
 class BenchmarkAiDiagnosisRefreshView(APIView):
-    """AI 경영 진단 새로고침 (OpenAI 강제 재실행)."""
-    # 유료 LLM 호출 남용 방어
+    """캐시를 사용하지 않고 AI 경영 진단을 다시 생성한다."""
+    # 새 진단 요청이 유료 호출을 과도하게 만들지 않도록 제한한다.
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "llm"
 
@@ -144,8 +144,8 @@ class BenchmarkAiDiagnosisRefreshView(APIView):
 
 
 class BenchmarkDeepDiagnosisView(APIView):
-    """8월 경영 종합 진단 리포트 (모달 팝업 전용 심층 진단 데이터)."""
-    # 유료 LLM 호출 남용 방어
+    """선택한 월의 경영 종합 진단을 조회한다."""
+    # 심층 진단의 유료 호출이 남용되지 않도록 제한한다.
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "llm"
 

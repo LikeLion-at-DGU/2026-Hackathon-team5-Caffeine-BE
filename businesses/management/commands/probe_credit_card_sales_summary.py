@@ -223,11 +223,8 @@ class Command(BaseCommand):
 
         provider = RealCodefProvider(client=CodefClient())
 
-        # 인증서 필드는 RealCodefProvider의 내부 헬퍼를 그대로 호출한다.
-        # 여기서 파일 경로 처리 로직을 다시 베껴 쓰면, 이번에 겪었던 것처럼
-        # probe와 real.py가 서로 다른 규칙(문자열 vs 파일경로)으로 갈라져도
-        # 아무도 못 알아채는 문제가 또 생길 수 있다. year/분기는 이 상품
-        # 고유의 CODEF wire format 그대로라 재조합 없이 바로 쓴다.
+        # 진단 명령과 실제 요청의 인증서 처리 규칙이 달라지지 않도록 제공자의
+        # 필드 생성 로직을 재사용한다. 연도와 분기는 CODEF 원본 형식을 유지한다.
         try:
             certificate_fields = (
                 provider._get_credit_card_sales_certificate_fields()

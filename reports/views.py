@@ -21,7 +21,7 @@ def _error_response(code: str, message: str, http_status: int, errors: dict | No
 
 
 def _check_business(request, business_id):
-    """core.permissions.check_business 위임 — IDOR 검증 로직 단일화."""
+    """공통 사업장 권한 검사로 위임한다."""
     return check_business(request, business_id)
 
 

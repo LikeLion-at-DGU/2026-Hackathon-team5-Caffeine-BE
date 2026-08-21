@@ -5,7 +5,7 @@ from payroll.models import Employee
 
 
 def create_employee(business_id: int, validated_data: dict) -> Employee:
-    # TODO(assumption): 중복 판단 기준이 명세서에 명시되지 않아 '동일 사업장 내 동일 이름 존재'로 임시 정의.
+    # 직원 식별번호가 없어 같은 사업장 안의 동명이인을 중복으로 판단한다.
     if Employee.objects.filter(business_id=business_id, name=validated_data["name"]).exists():
         raise EmployeeAlreadyExists()
 

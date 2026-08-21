@@ -29,11 +29,11 @@ class Employee(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def set_rrn_front(self, plain_value: str) -> None:
-        """평문 rrn_front를 받아 암호화해서 저장 필드에 세팅."""
+        """주민등록번호 앞자리를 암호화해 저장 필드에 설정한다."""
         self.rrn_front_encrypted = encrypt_rrn_front(plain_value) if plain_value else ""
 
     def get_rrn_front(self) -> str:
-        """저장된 암호문을 복호화해서 반환. 목록 응답에는 절대 쓰지 않을 것."""
+        """저장된 주민등록번호 앞자리를 필요한 시점에만 복호화한다."""
         return decrypt_rrn_front(self.rrn_front_encrypted) if self.rrn_front_encrypted else ""
 
     def __str__(self) -> str:

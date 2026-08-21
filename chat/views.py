@@ -18,7 +18,7 @@ from .services.periods import extract_requested_periods
 
 
 def _requested_period(message, *, default_year, default_month):
-    """질문에 적힌 연월을 우선 사용하고, 없으면 현재 연월을 반환한다."""
+    """질문의 연월을 우선하고, 없으면 화면의 기준 연월을 사용한다."""
     return extract_requested_periods(
         message,
         default_year=default_year,
@@ -27,12 +27,12 @@ def _requested_period(message, *, default_year, default_month):
 
 
 def _check_business_owner(request, business):
-    """core.permissions.check_business_owner 위임 — IDOR 검증 로직 단일화."""
+    """공통 사업장 권한 검사로 위임한다."""
     return check_business_owner(request, business)
 
 
 class ChatMessageView(APIView):
-    # 유료 LLM 호출 남용 방어
+    # 데모 환경에서 유료 LLM 호출이 남용되지 않도록 제한한다.
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "llm"
 

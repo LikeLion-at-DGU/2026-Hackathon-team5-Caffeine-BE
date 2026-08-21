@@ -14,10 +14,10 @@ from core.serializers import (
 
 
 class LoginView(APIView):
-    """사용자 로그인 및 DRF Token 발급."""
+    """로그인한 사용자에게 API 토큰과 기본 사업장을 반환한다."""
 
     permission_classes = [AllowAny]
-    # 비밀번호 무차별 시도 방어
+    # 비밀번호 무차별 대입을 제한한다.
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "login"
 
@@ -34,7 +34,6 @@ class LoginView(APIView):
         user = serializer.validated_data["user"]
         token, _ = Token.objects.get_or_create(user=user)
 
-        # 소유 사업장 목록 조회
         businesses = user.businesses.all().order_by("id")
         primary_business = businesses.first()
 
@@ -54,7 +53,7 @@ class LoginView(APIView):
 
 
 class RegisterView(APIView):
-    """사용자 회원가입 및 기본 사업장 생성 후 토큰 즉시 발급."""
+    """사용자와 기본 사업장을 만들고 바로 사용할 API 토큰을 발급한다."""
 
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
@@ -90,7 +89,7 @@ class RegisterView(APIView):
 
 
 class LogoutView(APIView):
-    """로그아웃 (발급된 토큰 폐기)."""
+    """현재 API 토큰을 폐기해 로그아웃한다."""
 
     permission_classes = [IsAuthenticated]
 
@@ -106,7 +105,7 @@ class LogoutView(APIView):
 
 
 class MeView(APIView):
-    """현재 로그인된 유저 정보 및 소유 사업장 목록 조회."""
+    """현재 사용자와 접근 가능한 사업장 목록을 반환한다."""
 
     permission_classes = [IsAuthenticated]
 

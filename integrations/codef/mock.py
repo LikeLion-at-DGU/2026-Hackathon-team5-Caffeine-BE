@@ -9,13 +9,13 @@ FIXTURES_DIR = os.path.join(
     "fixtures",
 )
 
-# CODEF 표준 응답 상태 코드 (실제 CODEF 규격과 일치)
+# 목업에서도 실제 CODEF 상태 코드를 사용해 분기 동작을 검증한다.
 _SUCCESS = "CF-00000"
 _AUTH_REQUIRED = "CF-03002"
 
 
 def load_fixture(filename):
-    """fixtures 폴더의 JSON 파일을 dict로 읽어 반환한다."""
+    """실제 CODEF 응답 형식을 보존한 JSON 픽스처를 읽는다."""
 
     path = os.path.join(
         FIXTURES_DIR,
@@ -27,16 +27,14 @@ def load_fixture(filename):
 
 
 class MockCodefProvider(BaseCodefProvider):
-    """개발 및 테스트용 CODEF Mock Provider.
+    """외부 호출 없이 고정 응답을 제공하는 CODEF 목업.
 
     외부 CODEF API를 호출하지 않고 fixture 기반 응답을 반환한다.
     Real Provider와 동일한 인터페이스를 유지하되 거래 조회에서는
     실제 카카오 2-way 인증을 발생시키지 않는다.
     """
 
-    # ==================================================
     # 거래 소유 사업장 확인
-    # ==================================================
 
     def ensure_business_access(
         self,
@@ -75,9 +73,7 @@ class MockCodefProvider(BaseCodefProvider):
                 "소유자로 확인할 수 없습니다."
             )
 
-    # ==================================================
     # 사업자등록상태
-    # ==================================================
 
     def get_business_status(
         self,
@@ -88,7 +84,7 @@ class MockCodefProvider(BaseCodefProvider):
         raw = load_fixture(
             "business_status_success.json"
         )
-        # result 객체 또는 최상위 code 확인
+        # CODEF 상품별 응답 차이를 흡수하기 위해 두 코드 위치를 모두 확인한다.
         result = raw.get("result", {})
         code = result.get("code") or raw.get("code", "")
 
@@ -99,7 +95,7 @@ class MockCodefProvider(BaseCodefProvider):
                 "error_message": result.get("message") or raw.get("message", ""),
             }
 
-        # data 배열이 있으면 첫 번째 요소, 없으면 raw 본문 참조
+        # 목록형·단건형 픽스처를 같은 내부 형식으로 맞춘다.
         item = raw.get("data", [{}])[0] if isinstance(raw.get("data"), list) and raw.get("data") else raw
 
         return {
@@ -128,9 +124,7 @@ class MockCodefProvider(BaseCodefProvider):
             ),
         }
 
-    # ==================================================
     # 기존 CODEF 연결 인증
-    # ==================================================
 
     def request_auth(
         self,
@@ -165,9 +159,7 @@ class MockCodefProvider(BaseCodefProvider):
             )
         )
 
-    # ==================================================
     # 사업자 등록사항
-    # ==================================================
 
     def get_business_registration_info(self, business):
         """사업자 업종정보 조회 Mock 응답을 반환한다."""
@@ -207,9 +199,7 @@ class MockCodefProvider(BaseCodefProvider):
             ),
         }
 
-    # ==================================================
     # 사업용 신용카드 매입
-    # ==================================================
 
     def get_business_card_purchases(
         self,
@@ -220,7 +210,7 @@ class MockCodefProvider(BaseCodefProvider):
         two_way_info=None,
         simple_auth=None,
     ):
-        """사업용 신용카드 매입 Mock 응답을 반환한다.
+        """사업용 신용카드 매입 목업 응답을 반환한다.
 
         Real Provider와 동일한 2-way 인자를 받지만 Mock에서는
         실제 추가인증을 수행하지 않고 최종 성공 fixture를 반환한다.
@@ -230,9 +220,7 @@ class MockCodefProvider(BaseCodefProvider):
             "business_card_purchase_success.json"
         )
 
-    # ==================================================
     # 현금영수증 매출
-    # ==================================================
 
     def get_cash_receipt_sales(
         self,
@@ -249,9 +237,7 @@ class MockCodefProvider(BaseCodefProvider):
             "cash_receipt_sales_success.json"
         )
 
-    # ==================================================
     # 전자세금계산서 매입
-    # ==================================================
 
     def get_tax_invoice_purchases(
         self,
@@ -268,9 +254,7 @@ class MockCodefProvider(BaseCodefProvider):
             "tax_invoice_purchase_success.json"
         )
 
-    # ==================================================
     # 전자세금계산서 매출
-    # ==================================================
 
     def get_tax_invoice_sales(
         self,
@@ -287,9 +271,7 @@ class MockCodefProvider(BaseCodefProvider):
             "tax_invoice_sales_success.json"
         )
 
-    # ==================================================
     # 신용카드 매출자료
-    # ==================================================
 
     def get_credit_card_sales_summary(
         self,
@@ -307,9 +289,7 @@ class MockCodefProvider(BaseCodefProvider):
             "credit_card_sales_success.json"
         )
 
-    # ==================================================
-    # 기존 인증 응답 Normalizer
-    # ==================================================
+    # 기존 인증 응답 정규화
 
     @staticmethod
     def _normalize_hometax(raw):

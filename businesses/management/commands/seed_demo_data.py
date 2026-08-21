@@ -51,7 +51,7 @@ class Command(BaseCommand):
         parse_year_month(options["year_month"])
         business_number = self.DEMO_BUSINESS_NUMBER
 
-        # 1. 고정 데모 유저 및 토큰 생성
+        # 영상과 프론트 설정이 바뀌지 않도록 데모 계정과 토큰을 고정한다.
         demo_user, _ = User.objects.get_or_create(
             username="demo",
             defaults={"email": "demo@suanecoffee.com", "first_name": "수아", "last_name": "조"},
@@ -62,9 +62,7 @@ class Command(BaseCommand):
         demo_user.set_password("demo1234")
         demo_user.save()
 
-        # 프론트엔드가 로그인 없이도 고정 토큰으로 데모 API를 호출할 수 있도록
-        # 매번 동일한 키를 보장한다. 같은 키가 다른 사용자에게 할당된 경우에는
-        # 해당 사용자의 인증정보를 빼앗지 않고 명시적으로 실패한다.
+        # 같은 키가 다른 사용자에게 있으면 인증정보를 덮어쓰지 않고 중단한다.
         token_with_fixed_key = Token.objects.filter(
             key=self.DEMO_TOKEN_KEY,
         ).first()
@@ -94,8 +92,7 @@ class Command(BaseCommand):
             )
 
         if options["reset"]:
-            # 데모 사업장 FK 하위 데이터만 cascade로 정리한다. 다른 사업자의
-            # 거래·급여·리포트·AI 진단 이력은 절대 삭제하지 않는다.
+            # 다른 사업장을 보존하기 위해 데모 사업장의 하위 데이터만 초기화한다.
             Business.objects.filter(
                 business_number=business_number,
                 is_demo=True,
@@ -131,7 +128,7 @@ class Command(BaseCommand):
                 },
             )
 
-        # 3월부터 8월까지 6개월간의 전체 거래 동기화
+        # 모든 시연 화면이 같은 기간을 사용하도록 3월부터 8월까지 동기화한다.
         sync_start_date = date(2026, 3, 1)
         sync_end_date = date(2026, 8, 31)
 
@@ -147,8 +144,7 @@ class Command(BaseCommand):
             ],
         )
 
-        # 개인 지출 분류 및 공제 확정 처리 (CU 편의점/유튜브 프리미엄/무신사/블루보틀 등)
-        # 분류 결과는 외부 LLM 호출에 의존하지 않는 고정 시연 스냅샷으로 만든다.
+        # 영상마다 결과가 달라지지 않도록 개인 지출과 공제 결과를 고정한다.
         personal_keywords = ("유튜브", "무신사", "블루보틀", "CU", "편의점", "개인")
         purchases = Transaction.objects.filter(
             business=business,
@@ -189,10 +185,10 @@ class Command(BaseCommand):
                 ),
             )
 
-        # 직원 3명 등록 (이도현, 박서연, 최우식)
+        # 고용 형태별 화면을 확인할 수 있도록 정규직·단시간·프리랜서를 구성한다.
         employee_specs = [
             ("이도현", "FULL_TIME", 11500, 160, False),
-            # 3월~8월 계속 근무하는 데모 단시간 근로자로 고용보험 적용 대상이다.
+            # 3개월 이상 계약한 단시간 근로자의 고용보험 사례.
             ("박서연", "PART_TIME", 10200, 80, True),
             ("최우식", "FREELANCER", 15000, 40, False),
         ]
@@ -208,7 +204,7 @@ class Command(BaseCommand):
                 },
             )
 
-        # 3월 ~ 8월 6개월간 매월 급여 생성
+        # 월간 비교가 가능하도록 거래 기간과 같은 6개월 급여를 생성한다.
         for m in range(3, 9):
             for emp in Employee.objects.filter(business=business):
                 if not Payment.objects.filter(employee=emp, year=2026, month=m).exists():
@@ -220,7 +216,7 @@ class Command(BaseCommand):
                         emp.monthly_contracted_hours,
                     )
 
-        # 3월~8월 성수동 커피·음료 상권 비교 데이터도 같은 값으로 복원한다.
+        # 경영 분석 결과가 고정되도록 동일 기간의 상권 기준값을 복원한다.
         for benchmark_month, spec in self.BENCHMARK_SPECS.items():
             revenue, raw, labor, rent, supplies, profit = spec
             IndustryBenchmark.objects.update_or_create(
@@ -241,13 +237,13 @@ class Command(BaseCommand):
                 },
             )
 
-        # 3월 ~ 7월 과거 월은 마감(CLOSED) 처리
+        # 과거 월은 내보내기 가능하게 마감하고 시연 대상인 8월은 열어 둔다.
         for m in range(3, 8):
             close = MonthlyClose.objects.filter(business=business, year=2026, month=m).first()
             if close is None or close.status != MonthlyClose.Status.CLOSED:
                 MonthlyCloseService.approve(business=business, year=2026, month=m)
 
-        # 마감된 가장 최근 월(7월) 정기 리포트 생성
+        # 마감된 최신 월을 기준으로 리포트 다운로드 예시를 준비한다.
         try:
             generate_report(business.id, "2026-07")
         except Exception:

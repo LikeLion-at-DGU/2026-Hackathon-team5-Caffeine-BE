@@ -66,7 +66,7 @@ class TaxTypeHistory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        # 최신 변경 이력부터 조회
+        # 화면과 감사 로그에서 최근 변경을 먼저 보여준다.
         ordering = ["-created_at"]
 
     def __str__(self):
@@ -106,13 +106,13 @@ class CodefConnection(models.Model):
         default="DISCONNECTED",
     )
 
-    # CODEF 연결 성공 시 발급되는 Connected ID
+    # 재인증 없이 외부 계정을 조회하기 위한 CODEF 연결 식별자.
     connected_id = models.CharField(
         max_length=255,
         blank=True,
     )
 
-    # CODEF 2-way 추가인증 재요청에 필요한 정보
+    # CODEF 추가인증 재요청에 필요한 일회성 상태.
     continue_2way = models.BooleanField(default=False)
     method = models.CharField(max_length=50, blank=True)
     job_index = models.IntegerField(null=True, blank=True)
@@ -123,21 +123,20 @@ class CodefConnection(models.Model):
         blank=True,
     )
 
-    # 최근 CODEF 오류 정보
+    # 사용자 안내와 재시도 판단에 사용하는 최근 오류.
     last_error_code = models.CharField(
         max_length=50,
         blank=True,
     )
     last_error_message = models.TextField(blank=True)
 
-    # 디버깅용 최근 CODEF 원본 응답
+    # 장애 분석을 위해 보관하는 최근 CODEF 응답.
     last_raw_response = models.JSONField(
         null=True,
         blank=True,
     )
 
-    # Transaction Sync 중 추가인증이 발생한 요청 정보.
-    # 인증 완료 후 어떤 거래 조회를 재개해야 하는지 식별하는 데 사용한다.
+    # 추가인증이 끝난 뒤 중단된 거래 동기화를 이어가기 위한 요청 정보.
     pending_source = models.CharField(
         max_length=50,
         blank=True,
@@ -159,7 +158,7 @@ class CodefConnection(models.Model):
 
     class Meta:
         constraints = [
-            # 사업장별 CARD/HOMETAX 연결은 하나씩만 유지
+            # 같은 사업장과 연결 유형의 상태가 중복되지 않도록 제한한다.
             models.UniqueConstraint(
                 fields=[
                     "business",

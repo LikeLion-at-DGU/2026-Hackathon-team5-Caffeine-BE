@@ -1,10 +1,10 @@
-"""임금명세서(FULL_TIME/PART_TIME)·지급명세서(FREELANCER) PDF 생성.
+"""근로자 임금명세서와 프리랜서 지급명세서 PDF를 생성한다.
 
 근로기준법 시행령 제27조의2에 따른 임금명세서 필수 기재사항 반영:
 - 근로자 특정 정보(성명), 임금 총액, 임금 구성항목별 금액, 계산방법(근무시간),
   공제 항목별 금액 및 계산방법, 임금지급일
 
-FREELANCER는 근로기준법상 근로자가 아니므로 "지급명세서" 서식 사용 (임금명세서 아님).
+프리랜서는 근로기준법상 근로자가 아니므로 지급명세서 서식을 사용한다.
 """
 
 import io
@@ -19,7 +19,7 @@ from reportlab.pdfgen import canvas
 
 from payroll.services.payment_service import get_payslip_data
 
-# 한글 출력을 위해 나눔고딕 TTF 폰트 등록
+# 서버 환경에서도 한글이 깨지지 않도록 폰트를 직접 등록한다.
 _FONT_DIR = Path(__file__).resolve().parent.parent / "fonts"
 pdfmetrics.registerFont(TTFont("NanumGothic", str(_FONT_DIR / "NanumGothic.ttf")))
 pdfmetrics.registerFont(TTFont("NanumGothicBold", str(_FONT_DIR / "NanumGothicBold.ttf")))
@@ -106,7 +106,7 @@ def _draw_payslip_page(c: canvas.Canvas, payment) -> None:
 
 
 def generate_payslip_pdf(payments: list) -> bytes:
-    """여러 직원의 명세서를 한 PDF에 페이지별로 담아 bytes로 반환."""
+    """직원별 명세서를 페이지로 나누어 하나의 PDF로 반환한다."""
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
 

@@ -9,7 +9,7 @@ from .types import NormalizedMonthlySalesSummary, NormalizedTransaction
 
 
 class TransactionIngestionService:
-    """정규화가 끝난 거래를 재실행에 안전하게 저장한다."""
+    """동일한 동기화를 다시 실행해도 거래가 중복되지 않게 저장한다."""
 
     @db_transaction.atomic
     def save(
