@@ -1,4 +1,4 @@
-"""Billing-key names over the project-wide encryption primitive."""
+"""공통 암호화 모듈을 빌링키 용어로 감싼다."""
 
 from core.security.encryption import decrypt_value, encrypt_value
 

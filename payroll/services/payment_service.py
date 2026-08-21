@@ -96,7 +96,7 @@ def get_monthly_summary(business_id: int, year: int, month: int) -> dict:
 
 
 def get_payslip_data(payment) -> dict:
-    """임금명세서/지급명세서에 필요한 전체 데이터 (소득세/지방소득세/4대보험 항목별 분리 + 실수령액)."""
+    """명세서에 필요한 세금·보험료·실수령액을 한 번에 계산한다."""
     employee = payment.employee
     breakdown = calculate_withholding_breakdown(employee.employment_type, payment.gross_pay)
     insurance = calculate_employee_insurance_breakdown(employee, payment.gross_pay)

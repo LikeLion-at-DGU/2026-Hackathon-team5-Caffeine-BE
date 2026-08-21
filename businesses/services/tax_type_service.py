@@ -5,7 +5,7 @@ from integrations.codef.factory import get_codef_provider
 from businesses.models import TaxTypeHistory
 
 
-# CODEF 과세유형 코드를 서비스 내부 값으로 변환
+# CODEF 코드를 서비스의 과세유형 값으로 정규화한다.
 TAX_TYPE_MAP = {
     "1": "GENERAL",      # 일반과세자
     "2": "SIMPLE",       # 간이과세자
@@ -15,7 +15,7 @@ TAX_TYPE_MAP = {
     "99": "GENERAL",     # 국세청 미등록 가상 데모 사업자 -> 일반과세자 매핑
 }
 
-# 사업자 상태 코드 변환
+# CODEF 상태 코드를 서비스의 사업자 상태로 정규화한다.
 BUSINESS_STATUS_MAP = {
     "4": "CLOSED",         # 폐업자
     "5": "SUSPENDED",      # 휴업자
@@ -35,7 +35,7 @@ class TaxTypeService:
         with transaction.atomic():
             result = provider.get_business_status(business.business_number)
 
-            # CODEF 조회 실패 시 기존 사업장 정보는 변경하지 않는다.
+            # 외부 조회 실패가 저장된 사업장 정보를 훼손하지 않도록 원자적으로 중단한다.
             if result["outcome"] != "SUCCESS":
                 raise CodefResponseError(
                     f"CODEF 응답 실패: "
@@ -43,7 +43,7 @@ class TaxTypeService:
                     f"{result.get('error_message')!r}"
                 )
 
-            # 요청한 사업자번호와 응답의 사업자번호가 일치하는지 확인한다.
+            # 다른 사업자의 응답이 저장되지 않도록 사업자번호를 대조한다.
             reported_id = result.get("company_identity_no")
             if (
                 business.business_number
@@ -62,14 +62,14 @@ class TaxTypeService:
             old_code = business.tax_type_code
             new_code = result.get("taxation_type_code", "")
 
-            # 과세유형 코드가 없으면 기존 값을 덮어쓰지 않고 동기화를 중단한다.
+            # 빈 코드로 기존 과세유형을 덮어쓰지 않는다.
             if not new_code:
                 raise CodefResponseError(
                     "CODEF 응답은 성공이지만 taxation_type_code가 비어 있어 "
                     "갱신을 건너뜁니다."
                 )
 
-            # 과세유형이 실제로 변경된 경우에만 변경 이력을 저장한다.
+            # 동일 값 재동기화로 불필요한 변경 이력이 쌓이지 않도록 한다.
             if old_code and old_code != new_code:
                 TaxTypeHistory.objects.create(
                     business=business,
@@ -84,10 +84,10 @@ class TaxTypeService:
 
             business.tax_type_code = new_code
 
-            # 매핑되지 않은 과세유형 코드는 UNKNOWN으로 저장한다.
+            # 새 CODEF 코드도 유실되지 않도록 알 수 없는 유형으로 보존한다.
             business.tax_type = TAX_TYPE_MAP.get(new_code, "UNKNOWN")
 
-            # 상태 코드에 따라 사업자 상태를 갱신한다.
+            # 상태 코드가 없으면 기존 정상 사업장 흐름을 유지한다.
             business.business_status = BUSINESS_STATUS_MAP.get(
                 new_code,
                 "ACTIVE",

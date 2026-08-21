@@ -24,7 +24,7 @@ OFFICIAL_TAX_DOMAINS = [
 
 
 class OpenAIChatResponder:
-    """Friendly assistant grounded in service data and official tax sources."""
+    """서비스 데이터와 공식 세무 근거를 바탕으로 OpenAI 답변을 생성한다."""
 
     name = "OPENAI"
 
@@ -190,7 +190,7 @@ class OpenAIChatResponder:
         return sections
 
     def _build_period_comparison(self, *, business, periods):
-        """여러 달 질문에 필요한 핵심 정량값만 월별로 묶어 토큰을 절약한다."""
+        """여러 달 비교에 필요한 정량값만 월별로 묶어 전달한다."""
         builders = {
             "transactions": self.fallback._transaction_reply,
             "analytics": self.fallback._analytics_reply,

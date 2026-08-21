@@ -1,10 +1,10 @@
-"""CODEF API 통신을 담당하는 공통 클라이언트.
+"""CODEF 인증과 상품 API 요청을 공통 처리한다.
 
 - Access Token 발급
 - CODEF 상품 API 요청
 - CODEF 응답 디코딩 및 JSON 변환
 
-요청/응답 인코딩 방식은 CODEF 공식 Python SDK(easycodefpy)를 따른다.
+요청·응답 인코딩은 CODEF 공식 Python SDK와 같은 방식을 사용한다.
 """
 
 import base64
@@ -76,7 +76,7 @@ class CodefClient:
 
         token = self.get_access_token()
 
-        # CODEF 공식 SDK 방식에 맞춰 요청 본문을 URL 인코딩한다.
+        # 공식 SDK와 동일한 전송 형식을 유지하도록 본문을 URL 인코딩한다.
         body_str = quote(
             json.dumps(payload, ensure_ascii=False)
         )
@@ -94,7 +94,7 @@ class CodefClient:
         response.raise_for_status()
 
         try:
-            # CODEF 응답을 URL 디코딩한 뒤 JSON으로 변환한다.
+            # URL 인코딩된 CODEF 응답을 복원한 뒤 JSON으로 변환한다.
             return json.loads(
                 unquote_plus(response.text)
             )
@@ -106,11 +106,9 @@ class CodefClient:
 
 
 def encrypt_with_public_key(text: str) -> str:
-    """CODEF Public Key로 평문을 RSA 암호화한다.
+    """CODEF 공개키로 민감한 요청값을 RSA 암호화한다.
 
-    공식 CODEF Python SDK(easycodefpy)의 util.encrypt_rsa()와 완전히 동일한
-    방식이다 — RSA / PKCS1_v1_5 padding, 공개키는 base64로 인코딩된 DER
-    형식이라고 가정한다.
+    공식 SDK와 호환되도록 PKCS1 v1.5 패딩과 Base64 DER 공개키 형식을 사용한다.
     """
 
     if not settings.CODEF_PUBLIC_KEY:
@@ -156,7 +154,7 @@ def extract_two_way_info(raw: dict) -> dict:
 
 
 def build_two_way_payload(base_payload: dict, two_way_info: dict, simple_auth: str,) -> dict:
-    """1차 요청 payload에 추가인증 정보를 덧붙인 2차 요청 payload를 만든다."""
+    """최초 요청값을 보존하면서 추가인증 재요청값을 구성한다."""
     return {
         **base_payload,
         "simpleAuth": simple_auth,

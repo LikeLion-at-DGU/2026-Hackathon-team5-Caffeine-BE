@@ -11,7 +11,7 @@ def _parse_year_month(year_month):
 
 
 def get_sales_invoices(business, year_month):
-    """매출 세금계산서 목록"""
+    """리포트 기간의 매출 세금계산서를 반환한다."""
     year, month = _parse_year_month(year_month)
     start_date, end_date = month_range(year, month)
     return effective_transactions(
@@ -25,7 +25,7 @@ def get_sales_invoices(business, year_month):
 
 
 def get_purchase_evidences(business, year_month):
-    """매입 증빙 서류 (카드/현금영수증/전자세금계산서)"""
+    """리포트 기간의 카드·현금영수증·세금계산서 매입 증빙을 반환한다."""
     year, month = _parse_year_month(year_month)
     start_date, end_date = month_range(year, month)
     return effective_purchase_transactions(
@@ -43,7 +43,7 @@ def get_purchase_evidences(business, year_month):
 
 
 def get_labor_cost_statements(business, year_month):
-    """인건비 지급 명세서"""
+    """리포트 기간의 급여 지급 내역을 반환한다."""
     year, month = _parse_year_month(year_month)
     return Payment.objects.filter(
         employee__business=business,
@@ -53,7 +53,7 @@ def get_labor_cost_statements(business, year_month):
 
 
 def get_deemed_purchase_deductions(business, year_month):
-    """현재 규칙상 의제매입 검토 후보인 면세 원재료 목록."""
+    """리포트 기간의 면세 원재료 중 의제매입 검토 후보를 반환한다."""
     year, month = _parse_year_month(year_month)
     start_date, end_date = month_range(year, month)
     purchases = effective_purchase_transactions(

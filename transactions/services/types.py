@@ -6,7 +6,7 @@ from typing import Any
 
 @dataclass(frozen=True, slots=True)
 class NormalizedTransaction:
-    """CODEF source별 normalizer가 공통으로 반환할 내부 거래 형식."""
+    """수집 경로별 CODEF 응답을 저장 전에 통일한 내부 거래 형식."""
 
     source_type: str
     external_id: str

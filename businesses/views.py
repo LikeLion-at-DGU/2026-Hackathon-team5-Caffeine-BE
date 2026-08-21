@@ -28,7 +28,7 @@ class BusinessViewSet(
 
     permission_classes = [IsAuthenticated, IsBusinessOwner]
 
-    # 조회, 수정(PATCH), CODEF 관련 action만 허용
+    # 삭제로 외부 연동 이력까지 유실되지 않도록 필요한 메서드만 허용한다.
     http_method_names = ["get", "post", "patch", "head", "options"]
 
     queryset = Business.objects.all()
@@ -45,7 +45,6 @@ class BusinessViewSet(
         )
 
     def update(self, request, *args, **kwargs):
-        # PATCH 요청에 공통 응답 포맷 적용
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
 
@@ -72,7 +71,6 @@ class BusinessViewSet(
     def tax_type_history(self, request, pk=None):
         business = self.get_object()
 
-        # 과세유형 변경 이력 조회
         histories = business.tax_type_histories.all()
         data = TaxTypeHistorySerializer(histories, many=True).data
 
@@ -94,7 +92,6 @@ class BusinessViewSet(
         try:
             result = TaxTypeService().sync(business)
         except CodefResponseError as e:
-            # CODEF 응답 처리 실패
             return error_response(
                 code="CODEF_RESPONSE_ERROR",
                 message="과세유형 정보를 동기화하지 못했습니다.",
@@ -147,7 +144,6 @@ class BusinessViewSet(
     def codef_auth(self, request, pk=None):
         business = self.get_object()
 
-        # 연결 유형(CARD/HOMETAX) 검증
         serializer = CodefAuthRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -171,7 +167,6 @@ class BusinessViewSet(
     def codef_auth_status(self, request, pk=None):
         business = self.get_object()
 
-        # CARD/HOMETAX 연결 상태 조회
         result = CodefAuthService().status(business)
 
         return success_response(
@@ -189,7 +184,6 @@ class BusinessViewSet(
     def codef_auth_retry(self, request, pk=None):
         business = self.get_object()
 
-        # 재시도할 연결 유형 검증
         serializer = CodefAuthRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -199,7 +193,6 @@ class BusinessViewSet(
                 serializer.validated_data["connection_type"],
             )
         except InvalidAuthRequestError as e:
-            # 허용되지 않는 인증 재시도 요청
             return error_response(
                 code="INVALID_AUTH_REQUEST",
                 message="인증 재시도 요청이 올바르지 않습니다.",

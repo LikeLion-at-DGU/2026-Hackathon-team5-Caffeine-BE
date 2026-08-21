@@ -23,12 +23,12 @@ class Subscription(models.Model):
     cancelled_at = models.DateField(null=True, blank=True)
     access_until = models.DateField(null=True, blank=True)
 
-    # 결제수단 — 카드번호 원본은 절대 저장하지 않음, PG사 발급 토큰만 저장
+    # 카드 원문 대신 PG사가 발급한 빌링키와 표시 정보만 저장한다.
     billing_key_encrypted = models.CharField(max_length=255, blank=True)
     card_company = models.CharField(max_length=50, blank=True)
     card_last4 = models.CharField(max_length=4, blank=True)
 
-    # 정기 결제(자동 갱신) 실패 시 사유 — 성공하면 빈 문자열로 초기화됨
+    # 다음 결제 재시도와 사용자 안내에 필요한 최근 실패 사유.
     last_payment_error = models.CharField(max_length=255, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

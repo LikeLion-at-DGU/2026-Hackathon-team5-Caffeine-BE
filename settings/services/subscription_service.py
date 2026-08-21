@@ -31,11 +31,7 @@ def update_payment_method(business_id: int, payment_token: str) -> Subscription:
     subscription.card_company = result["card_company"]
     subscription.card_last4 = result["card_last4"]
 
-    # 결제 실패(PAST_DUE) 상태였다면, 카드를 새로 등록한 시점에 바로 정상화한다.
-    # (다음 cron 실행까지 기다리지 않고 결제 수단 갱신 즉시 이용 재개)
-    # TODO: EXPIRED(구독 취소 후 만료됨) 상태에서의 "재구독" 흐름은 범위 밖 — 지금은 카드를
-    # 새로 등록해도 EXPIRED 상태가 그대로 유지된다. 재구독 정책(플랜 재선택 등)이 정해지면
-    # 여기에 EXPIRED -> ACTIVE 전환 + next_billing_date 재설정 로직을 추가해야 한다.
+    # 결제수단 교체 즉시 이용을 재개하되, 만료된 구독은 재구독 정책 없이 복구하지 않는다.
     if subscription.status == "PAST_DUE":
         subscription.status = "ACTIVE"
         subscription.last_payment_error = ""
@@ -53,13 +49,14 @@ def cancel_subscription(business_id: int) -> Subscription:
     today = timezone.now().date()
     subscription.status = "CANCELLED"
     subscription.cancelled_at = today
-    subscription.access_until = subscription.next_billing_date  # 남은 기간까지 이용 가능 (환불 없음)
+    # 이미 결제한 이용 기간은 취소 후에도 보장한다.
+    subscription.access_until = subscription.next_billing_date
     subscription.save()
     return subscription
 
 
 def _add_one_month(d: date) -> date:
-    """d 기준 정확히 한 달 뒤 날짜. 말일 케이스(1/31 -> 2/28 등)는 그 달의 마지막 날로 clamp."""
+    """결제일을 한 달 뒤로 옮기고, 없는 날짜는 해당 월 말일로 맞춘다."""
     year = d.year + (d.month // 12)
     month = d.month % 12 + 1
     day = min(d.day, calendar.monthrange(year, month)[1])
@@ -67,13 +64,16 @@ def _add_one_month(d: date) -> date:
 
 
 def run_due_billing(today: date | None = None) -> dict:
-    """정기 결제(자동 갱신) 배치. cron(run_billing_cycle 커맨드)에서 매일 호출된다.
+    """결제일이 지난 구독의 정기 결제를 처리한다.
 
-    ACTIVE 또는 PAST_DUE 상태이면서 next_billing_date가 도래한 구독을 대상으로,
-    등록된 결제 수단으로 mock 결제를 시도한다.
-    - 성공: next_billing_date를 한 달 뒤로 갱신하고 ACTIVE로 복구, 실패 사유 초기화
-    - 실패(또는 결제 수단 없음): PAST_DUE로 전환하고 사유를 기록 (next_billing_date는 그대로 두어
-      다음 cron 실행 때 재시도됨)
+    - 성공: 다음 결제일 갱신 및 정상 상태 복구
+    - 실패: 실패 사유 기록 후 다음 배치에서 재시도
+
+    Args:
+        today: 배치 기준일. 생략하면 서버의 현재 날짜를 사용한다.
+
+    Returns:
+        성공·실패·전체 처리 건수.
     """
     today = today or timezone.now().date()
     gateway = get_payment_gateway()
@@ -115,6 +115,6 @@ def run_due_billing(today: date | None = None) -> dict:
 
 
 def expire_lapsed_cancellations(today: date | None = None) -> int:
-    """CANCELLED 상태이면서 access_until이 지난 구독을 EXPIRED로 전환한다."""
+    """이용 기간이 끝난 취소 구독을 만료 상태로 전환한다."""
     today = today or timezone.now().date()
     return Subscription.objects.filter(status="CANCELLED", access_until__lt=today).update(status="EXPIRED")

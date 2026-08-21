@@ -5,15 +5,14 @@ from settings.services.subscription_service import expire_lapsed_cancellations, 
 
 
 class Command(BaseCommand):
-    """구독 정기 결제(자동 갱신) 및 취소된 구독의 만료 처리를 실행하는 배치.
+    """정기 결제와 취소 구독 만료를 실행하는 일일 배치.
 
     실제 운영에서는 서버 crontab에 다음과 같이 등록해 매일 새벽 한 번 실행한다.
 
         0 0 * * * cd /home/ubuntu/2026-Hackathon-team5-Caffeine-BE && \\
             venv/bin/python manage.py run_billing_cycle >> /home/ubuntu/logs/billing_cycle.log 2>&1
 
-    Celery beat 같은 별도 스케줄러 인프라 없이, Django 표준 management command +
-    OS cron 조합만으로 "정기적으로 자동 실행되는" 배치를 구현한다.
+    별도 작업 큐 없이 Django 관리 명령과 운영체제의 Cron으로 실행한다.
     """
 
     help = "구독 정기 결제(자동 갱신)를 실행하고, 취소된 구독 중 이용 기간이 끝난 건을 만료 처리합니다."

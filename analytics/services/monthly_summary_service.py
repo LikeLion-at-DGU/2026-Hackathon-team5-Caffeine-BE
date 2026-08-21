@@ -1,4 +1,4 @@
-"""월별 세무 현황 결산 및 부가세 공제 구조 분석 서비스."""
+"""홈 화면에 필요한 월별 손익과 부가세 현황을 집계한다."""
 
 from calendar import monthrange
 from datetime import date
@@ -18,7 +18,7 @@ _LABOR_CATEGORY_LABEL = "인건비"
 
 
 def _get_vat_filing_due_date(year: int, month: int) -> str:
-    """해당 월에 대한 부가세 신고 납부 기한."""
+    """조회 월이 속한 과세기간의 부가세 신고 기한을 반환한다."""
     if 1 <= month <= 3:
         return f"{year}-04-25"
     elif 4 <= month <= 6:
@@ -75,7 +75,7 @@ def _get_expense_breakdown(business_id: int, year: int, month: int) -> tuple[lis
 
 
 def _get_figma_grouped_expense_breakdown(business_id: int, year: int, month: int, labor_amount: int) -> list[dict]:
-    """피그마 디자인 4대 카테고리(재료비, 인건비, 임차료·관리비, 기타 경비)."""
+    """지출을 재료비·인건비·임차관리비·기타 경비로 묶는다."""
     business = Business.objects.get(pk=business_id)
     purchase_qs = effective_transactions(
         business=business,
@@ -133,7 +133,7 @@ def _expense_totals_by_category(business_id: int, year: int, month: int) -> dict
 
 
 def get_monthly_tax_summary(business_id: int, year: int, month: int) -> dict:
-    """홈 화면 상단 결산 및 부가세 적립금 종합 요약."""
+    """홈 화면에 표시할 월간 손익과 부가세 적립 정보를 반환한다."""
     business = Business.objects.get(pk=business_id)
     payroll_summary = get_payroll_summary(business_id, year, month)
     total_sales = _get_total_sales(business_id, year, month)
@@ -141,7 +141,7 @@ def get_monthly_tax_summary(business_id: int, year: int, month: int) -> dict:
     raw_expense_breakdown, total_expense_excluding_payroll = _get_expense_breakdown(business_id, year, month)
     total_expense = total_expense_excluding_payroll + payroll_summary["total_labor_cost"]
 
-    # 피그마 4대 카테고리
+    # 화면에서 비교하기 쉬운 네 가지 지출군으로 다시 묶는다.
     expense_breakdown = _get_figma_grouped_expense_breakdown(
         business_id, year, month, payroll_summary["total_labor_cost"]
     )
@@ -149,7 +149,7 @@ def get_monthly_tax_summary(business_id: int, year: int, month: int) -> dict:
     net_profit = int(total_sales) - int(total_expense)
     profit_margin = round(float(net_profit) / float(total_sales) * 100, 1) if total_sales else None
 
-    # 전월 대비 증감률
+    # 직전 월을 같은 기준으로 집계해 증감률을 계산한다.
     previous_year, previous_month = _previous_month(year, month)
     previous_sales = _get_total_sales(business_id, previous_year, previous_month)
     previous_categories = _expense_totals_by_category(business_id, previous_year, previous_month)
@@ -157,16 +157,14 @@ def get_monthly_tax_summary(business_id: int, year: int, month: int) -> dict:
 
     top_category = "LABOR" if payroll_summary["total_labor_cost"] > 0 else None
 
-    # 부가세 및 공제액 계산
+    # 간이·면세 사업자는 일반과세자와 계산 근거가 달라 별도 안내한다.
     vat_reserve_amount = None
     vat_breakdown = None
     vat_warnings = []
 
     if business.tax_type == "GENERAL":
         forecast = VatForecastService.calculate(business=business, year=year, month=month)
-        # Tax 앱을 부가세 계산의 단일 진실 공급원으로 사용한다. 이전 구현은
-        # Analytics가 raw Transaction을 다시 합산하면서 개인 지출/중복 거래까지
-        # 의제매입 후보로 포함해 Tax API와 서로 다른 금액을 반환할 수 있었다.
+        # 개인·중복 거래의 제외 기준이 달라지지 않도록 Tax 계산 결과를 재사용한다.
         sales_tax = int(forecast["output_vat"])
         purchase_tax = int(forecast["deductible_input_vat"])
         deemed_deduction = int(forecast["deemed_purchase_deduction"])
@@ -204,7 +202,7 @@ def get_monthly_tax_summary(business_id: int, year: int, month: int) -> dict:
 
 
 def get_deduction_breakdown(business_id: int, year: int, month: int) -> dict:
-    """Tax 앱의 공제 구조 계산 결과를 홈 화면 응답으로 그대로 사용한다."""
+    """Tax 앱과 동일한 기준의 공제 구조를 홈 화면에 전달한다."""
     business = Business.objects.get(pk=business_id)
     return build_deduction_breakdown(
         business=business,

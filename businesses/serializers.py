@@ -38,7 +38,7 @@ class BusinessSerializer(serializers.ModelSerializer):
             "is_demo",
         ]
 
-        # CODEF 또는 서버에서 관리하는 필드는 수정 불가
+        # 외부 조회로 동기화되는 값은 사용자 수정에서 제외한다.
         read_only_fields = [
             "industry_code",
             "business_type",
@@ -64,7 +64,6 @@ class TaxTypeHistorySerializer(serializers.ModelSerializer):
 
 
 class CodefAuthRequestSerializer(serializers.Serializer):
-    # CARD / HOMETAX만 허용
     connection_type = serializers.ChoiceField(
         choices=[c[0] for c in CodefConnection.CONNECTION_TYPES]
     )

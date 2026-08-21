@@ -41,7 +41,7 @@ class BusinessInfoSerializer(serializers.Serializer):
     business_number = serializers.CharField(allow_null=True, allow_blank=True)
     tax_type = serializers.CharField(required=False)
     industry_code = serializers.CharField(allow_blank=True)
-    # 업태/종목 - CODEF 조회 시점에 채워지는 원본 값. 합쳐서 보여주는 건 프론트 담당
+    # 업태와 종목은 화면에서 필요한 방식으로 조합할 수 있도록 분리한다.
     business_type = serializers.CharField(required=False, allow_blank=True)
     business_item = serializers.CharField(required=False, allow_blank=True)
 
@@ -53,7 +53,4 @@ class BusinessInfoUpdateSerializer(serializers.Serializer):
     phone_number = serializers.CharField(required=False, allow_blank=True)
     business_number = serializers.CharField(required=False, allow_blank=True)
     industry_code = serializers.CharField(required=False, allow_blank=True)
-    # tax_type은 서버 관리 필드이므로 Settings PATCH에서는 수정 X
-    # 과세유형 변경은 이력 기록을 위해 tax-type/sync API를 통해 처리
-    
-    
+    # 과세유형은 변경 이력을 남기는 동기화 API에서만 수정한다.

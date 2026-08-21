@@ -6,17 +6,16 @@ from benchmark.services.ai_diagnostician import AIDiagnostician
 
 
 class BenchmarkService:
-    """AI 경영 진단 및 상권 벤치마크 통합 오케스트레이션 서비스."""
+    """장부 지표·상권 기준·AI 진단을 하나의 대시보드 응답으로 묶는다."""
 
     @classmethod
     def get_dashboard_data(cls, business: Business, year: int, month: int) -> dict:
         year_month_str = f"{year:04d}-{month:02d}"
 
-        # 1. 정량 지표 및 상권 비교 계산
+        # AI 문장보다 먼저 재현 가능한 정량 지표를 계산한다.
         calc = BenchmarkCalculator.calculate(business=business, year=year, month=month)
 
-        # 2. AI 진단 캐시 조회. 장부/급여가 바뀌었으면 같은 연월 캐시라도
-        # 폐기하고 다시 생성해 정량 지표와 AI 문장이 서로 어긋나지 않게 한다.
+        # 장부나 급여가 바뀌면 같은 연월의 AI 문장도 새 지표에 맞게 다시 만든다.
         fingerprint = cls._calculation_fingerprint(calc)
         history = AIDiagnosisHistory.objects.filter(
             business=business,
@@ -45,7 +44,7 @@ class BenchmarkService:
                 },
             )
 
-        # 3. 피그마 화면 100% 매칭 응답 구조 조립
+        # 정량값과 진단 결과를 대시보드 응답 형식으로 조립한다.
         return {
             "business_id": calc.business_id,
             "business_name": calc.business_name,
@@ -77,10 +76,10 @@ class BenchmarkService:
     def refresh_diagnosis(cls, business: Business, year: int, month: int) -> dict:
         year_month_str = f"{year:04d}-{month:02d}"
 
-        # 1. 정량 지표 계산
+        # 새 진단도 현재 장부를 기준으로 생성한다.
         calc = BenchmarkCalculator.calculate(business=business, year=year, month=month)
 
-        # 2. AI 진단 강제 재실행
+        # 사용자가 요청한 새 진단은 기존 캐시를 사용하지 않는다.
         ai_res = AIDiagnostician().diagnose(calc)
 
         raw_response = dict(ai_res.raw_response or {})
@@ -112,7 +111,7 @@ class BenchmarkService:
 
     @staticmethod
     def _calculation_fingerprint(calc) -> dict:
-        """AI 문장을 무효화해야 하는 핵심 정량값의 직렬화 가능한 스냅샷."""
+        """AI 진단의 근거가 바뀌었는지 비교할 정량값을 반환한다."""
         return {
             "total_revenue": calc.total_revenue,
             "total_expense": calc.total_expense,

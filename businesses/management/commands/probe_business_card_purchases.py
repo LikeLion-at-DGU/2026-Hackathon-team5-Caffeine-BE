@@ -73,7 +73,7 @@ TWO_WAY_ARG_NAMES = (
 )
 
 
-# payload field / env / prompt / getpass 여부
+# 민감값별 환경변수와 대화형 입력 방식을 정의한다.
 _SENSITIVE_FIELD_SPECS = (
     (
         "userName",

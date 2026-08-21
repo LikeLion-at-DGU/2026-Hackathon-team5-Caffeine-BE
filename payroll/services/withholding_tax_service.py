@@ -3,9 +3,10 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
-MINOR_WITHHOLDING_THRESHOLD = 1000  # 소액부징수 기준: 원천징수세액(소득세+지방소득세) 합계 1,000원 미만이면 0원
+# 근로소득 소득세가 기준 미만이면 원천징수하지 않는다.
+MINOR_WITHHOLDING_THRESHOLD = 1000
 
-# 정확히 10,000,000원 지점의 소득세 (구간이 아닌 단일 값). 원본 표 별도 행으로 명시됨.
+# 간이세액표의 1,000만 원 경곗값을 초과 구간 계산의 기준으로 사용한다.
 TAX_AT_10_MILLION = 1_507_400
 
 _TABLE_PATH = Path(__file__).resolve().parent.parent / "fixtures" / "simplified_tax_table_family1.json"
@@ -21,7 +22,7 @@ def _load_brackets() -> list[dict]:
 
 
 def _lookup_income_tax_from_table(gross_pay: int) -> int:
-    """간이세액표(부양가족 1인)에서 소득세만 조회. 지방소득세 미포함, 소액부징수 미적용."""
+    """부양가족 1인 기준 간이세액표에서 소득세를 조회한다."""
     if gross_pay < 770_000:
         return 0
 
@@ -39,8 +40,9 @@ def _lookup_income_tax_from_table(gross_pay: int) -> int:
 
 
 def _calculate_income_tax_over_10m(gross_pay: int) -> int:
-    """1,000만원 초과 구간 소득세. 표 하단에 명시된 누진 계산식 그대로 구현.
-    TODO: 카페 인건비 규모에서 나올 가능성이 매우 낮은 구간. 반올림 방식은 표에 명시 없어 round()로 가정.
+    """간이세액표의 누진식으로 1,000만 원 초과 소득세를 계산한다.
+
+    표에 별도 절사 규정이 없어 원 단위는 일반 반올림한다.
     """
     base = TAX_AT_10_MILLION
     if gross_pay <= 14_000_000:
@@ -58,7 +60,7 @@ def _calculate_income_tax_over_10m(gross_pay: int) -> int:
 
 
 def calculate_income_tax(employment_type: str, gross_pay: int) -> int:
-    """소득세만 계산 (지방소득세 미포함, 소액부징수 미적용 — 순수 소득세 원본 값)."""
+    """고용 형태별 소득세 원금액을 계산한다."""
     if employment_type == "FREELANCER":
         return round(gross_pay * 0.03)
     elif employment_type in ("FULL_TIME", "PART_TIME"):
@@ -67,18 +69,15 @@ def calculate_income_tax(employment_type: str, gross_pay: int) -> int:
 
 
 def calculate_local_income_tax(income_tax: int) -> int:
-    """지방소득세 = 소득세의 10%. 원단위 미만 버림 (통상 관행 가정)."""
+    """소득세의 10%를 원 단위 미만 절사해 지방소득세를 계산한다."""
     return income_tax // 10
 
 
 def calculate_withholding_breakdown(employment_type: str, gross_pay: int) -> dict:
-    """원천세를 소득세/지방소득세로 분리해서 반환.
+    """원천세를 소득세와 지방소득세로 나누어 반환한다.
 
-    소액부징수(원천징수세액 1,000원 미만 시 미징수) 규칙:
-    - FREELANCER(인적용역 사업소득): 2024.7.1. 지급분부터 소액부징수 적용 제외
-      (국세청 확인, 계속적·반복적 인적용역 대가는 금액과 무관하게 항상 징수)
-    - FULL_TIME/PART_TIME(근로소득, 간이세액표): 소득세(국세) 단독 1,000원 미만
-      여부로 판정 — 지방소득세를 더한 합계 기준이 아님
+    - 프리랜서: 인적용역 사업소득이므로 금액과 관계없이 징수
+    - 근로자: 소득세가 1,000원 미만이면 소액부징수 적용
     """
     income_tax = calculate_income_tax(employment_type, gross_pay)
     local_income_tax = calculate_local_income_tax(income_tax)
@@ -90,15 +89,15 @@ def calculate_withholding_breakdown(employment_type: str, gross_pay: int) -> dic
 
 
 def calculate_withholding_tax(employment_type: str, gross_pay: int) -> int:
-    """원천세 합계(소득세+지방소득세)만 필요할 때 사용."""
+    """소득세와 지방소득세를 합한 원천세를 반환한다."""
     return calculate_withholding_breakdown(employment_type, gross_pay)["total"]
 
 
 def calculate_freelancer_tax(gross_pay: int) -> int:
-    """프리랜서 3.3% 원천세 (하위 호환용 wrapper)."""
+    """기존 호출부에서 사용하는 프리랜서 원천세 합계를 반환한다."""
     return calculate_withholding_tax("FREELANCER", gross_pay)
 
 
 def calculate_gross_pay(hourly_wage: int, work_hours: Decimal) -> int:
-    """시급 × 근무시간으로 세전 급여 계산."""
+    """시급과 근무시간으로 세전 급여를 계산한다."""
     return round(hourly_wage * float(work_hours))

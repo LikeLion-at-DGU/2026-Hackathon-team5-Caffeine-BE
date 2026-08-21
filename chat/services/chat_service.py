@@ -26,7 +26,7 @@ class ChatService:
             year=year,
             month=month,
         )
-        # 외부 API를 기다리는 동안 DB write transaction을 잡고 있지 않는다.
+        # OpenAI 응답을 기다리는 동안 DB 쓰기 잠금을 유지하지 않는다.
         with db_transaction.atomic():
             assistant_message = ChatMessage.objects.create(
                 business=business,

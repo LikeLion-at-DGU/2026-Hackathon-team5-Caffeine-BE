@@ -54,7 +54,7 @@ def _paginated_data(
 
 
 def _check_business_owner(request, business):
-    """core.permissions.check_business_owner 위임 — IDOR 검증 로직 단일화."""
+    """공통 사업장 권한 검사로 위임한다."""
     return check_business_owner(request, business)
 
 
@@ -171,7 +171,7 @@ class TransactionSyncView(APIView):
 
 
 class TransactionSyncRetryView(APIView):
-    """카카오 2-way 인증 완료 후, 대기 중이던 거래 조회를 재개한다.
+    """카카오 추가인증 후 대기 중인 거래 조회를 재개한다.
 
     business_id만 받는다 — 어떤 상품/기간을 재요청할지는
     CodefConnection.pending_*에 저장된 값으로 서버가 판단한다.
@@ -216,7 +216,7 @@ class TransactionSyncRetryView(APIView):
             )
 
         if result["outcome"] == "AUTH_REQUIRED":
-            # N차 인증 케이스: 재시도했는데 또 추가인증이 필요한 경우.
+            # 추가인증이 연속으로 필요한 경우 최신 인증 정보를 다시 전달한다.
             return success_response(
                 code="CODEF_TWO_WAY_AUTH_REQUIRED",
                 message="카카오 추가인증이 필요합니다. 인증 후 다시 재시도해주세요.",
@@ -273,7 +273,7 @@ class TransactionListView(APIView):
 
 
 class TransactionExportView(APIView):
-    """지출 내역 분류 화면에서 거래 내역을 CSV 파일로 즉시 다운로드하는 API."""
+    """분류 화면의 거래 내역을 엑셀 호환 CSV로 내보낸다."""
 
     def get(self, request, business_id=None):
         import csv
@@ -285,7 +285,7 @@ class TransactionExportView(APIView):
         if business_id is not None and "business_id" not in query_data:
             query_data["business_id"] = business_id
 
-        # year, month가 들어온 경우 start_date, end_date 자동 계산
+        # 월 단위 요청은 기존 기간 필터를 재사용할 수 있도록 날짜 범위로 변환한다.
         if "year" in query_data and "month" in query_data:
             try:
                 y = int(query_data["year"])
@@ -324,7 +324,7 @@ class TransactionExportView(APIView):
         if params.get("transaction_type"):
             queryset = queryset.filter(transaction_type=params["transaction_type"])
         else:
-            # 지출 내역 분류 화면에서 내보내기 시 기본적으로 지출(매입) 내역을 내보낸다.
+            # 거래 유형이 없으면 분류 화면의 기본 대상인 매입만 내보낸다.
             queryset = queryset.filter(transaction_type=Transaction.TransactionType.PURCHASE)
         for field in ["source_type", "category", "expense_purpose"]:
             if params.get(field):
@@ -333,7 +333,7 @@ class TransactionExportView(APIView):
         output = io.StringIO()
         writer = csv.writer(output)
 
-        # CSV 헤더 작성 (엑셀 친화적 한글 헤더)
+        # 사용자가 바로 확인할 수 있도록 한글 열 이름을 사용한다.
         writer.writerow([
             "거래일자",
             "거래시간",
@@ -371,7 +371,7 @@ class TransactionExportView(APIView):
         }
 
         for tx in queryset:
-            # 부가세 공제 상태 세분화 (개인 지출은 불공제, 의제매입/일반매입 구분)
+            # 공제 사유를 확인할 수 있도록 일반·의제·불공제를 구분한다.
             if tx.expense_purpose == Transaction.ExpensePurpose.PERSONAL:
                 deduction_display = "불공제"
             elif hasattr(tx, "deduction_review") and tx.deduction_review and tx.deduction_review.confirmed_status:
@@ -408,7 +408,7 @@ class TransactionExportView(APIView):
                 tx.approval_no or "",
             ])
 
-        # UTF-8 with BOM for Excel compatibility
+        # Windows Excel에서 한글이 깨지지 않도록 UTF-8 BOM을 붙인다.
         csv_bytes = output.getvalue().encode("utf-8-sig")
         response = HttpResponse(csv_bytes, content_type="text/csv; charset=utf-8-sig")
         date_str = params.get("start_date", timezone.localdate()).strftime("%Y-%m") if params.get("start_date") else "all"

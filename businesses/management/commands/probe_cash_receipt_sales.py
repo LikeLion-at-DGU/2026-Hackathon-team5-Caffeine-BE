@@ -74,8 +74,7 @@ SUCCESS_CODE = "CF-00000"
 
 TWO_WAY_ARG_NAMES = ("job_index", "thread_index", "jti", "two_way_timestamp")
 
-# (payload 필드명, .env 변수명, 프롬프트 문구, getpass 사용 여부).
-# CLI 플래그로 노출하지 않는다 — 셸 history/프로세스 목록에 남는 걸 막기 위함.
+# 민감값이 셸 기록과 프로세스 목록에 남지 않도록 CLI 인자로 받지 않는다.
 _SENSITIVE_FIELD_SPECS = (
     ("userName", "CODEF_PROBE_USER_NAME", "홈택스 사용자 이름", False),
     ("phoneNo", "CODEF_PROBE_PHONE_NO", "휴대폰 번호", True),
@@ -156,7 +155,7 @@ class Command(BaseCommand):
         parser.add_argument("--start-date", required=True, help="YYYYMMDD")
         parser.add_argument("--end-date", required=True, help="YYYYMMDD")
 
-        # 추측 금지 — CODEF 개발자센터 상품 페이지에서 직접 확인한 값만 넣는다.
+        # 상품 코드는 CODEF 개발자센터에서 확인한 값만 사용한다.
         parser.add_argument(
             "--organization",
             required=True,

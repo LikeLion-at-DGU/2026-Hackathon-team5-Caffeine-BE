@@ -2,26 +2,29 @@ from abc import ABC, abstractmethod
 
 
 class BasePaymentGateway(ABC):
-    """결제대행사(PG) 연동 공통 인터페이스.
-
-    Mock/Real 구현이 이 인터페이스만 따르면, factory에서 무엇을 반환하든
-    호출부(서비스 레이어)는 어떤 구현체인지 신경 쓰지 않아도 된다.
-    """
+    """목업과 실제 PG 구현이 공유하는 결제 인터페이스."""
 
     @abstractmethod
     def issue_billing_key(self, payment_token: str) -> dict:
-        """프론트에서 PG SDK로 발급받은 임시 토큰을 받아, 정기결제용 빌링키를 발급.
+        """PG 임시 토큰을 정기 결제용 빌링키로 교환한다.
+
+        Args:
+            payment_token: PG SDK에서 발급한 일회성 결제 토큰.
 
         Returns:
-            {"billing_key": str, "card_company": str, "card_last4": str}
+            빌링키와 카드 표시 정보.
         """
         pass
 
     @abstractmethod
     def charge(self, billing_key: str, amount: int) -> dict:
-        """빌링키로 결제 실행.
+        """저장된 빌링키로 정기 결제를 요청한다.
+
+        Args:
+            billing_key: PG에서 발급한 정기 결제 키.
+            amount: 결제 금액.
 
         Returns:
-            {"success": bool, "transaction_id": str, "charged_at": str}
+            결제 성공 여부와 거래 정보.
         """
         pass

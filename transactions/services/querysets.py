@@ -4,7 +4,7 @@ from transactions.models import Transaction, TransactionDuplicate
 
 
 def effective_transactions(*, business, start_date=None, end_date=None):
-    """Return non-cancelled transactions after confirmed duplicate removal."""
+    """취소 거래와 확정된 중복 거래를 제외한 유효 장부를 반환한다."""
     confirmed_duplicate_ids = TransactionDuplicate.objects.filter(
         business=business,
         status=TransactionDuplicate.Status.CONFIRMED,

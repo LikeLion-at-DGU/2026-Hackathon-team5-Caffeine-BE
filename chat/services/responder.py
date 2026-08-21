@@ -27,7 +27,7 @@ def _won(value):
 
 
 class RuleBasedChatResponder:
-    """실제 DB 숫자와 세무 법령 지식을 기반으로 명확하고 세분화된 답변을 제공하는 Responder."""
+    """OpenAI를 사용할 수 없을 때 실제 서비스 데이터로 기본 답변을 제공한다."""
 
     name = "RULE_BASED"
 
@@ -47,38 +47,31 @@ class RuleBasedChatResponder:
             default_month=month,
         )
 
-        # OpenAI 장애/키 미설정 상황에서도 월간 비교 질문은 실제 DB 값으로 답한다.
+        # OpenAI 장애 중에도 월간 비교는 추정하지 않고 실제 DB 값으로 답한다.
         if len(periods) > 1 and any(
             keyword in normalized
             for keyword in ("비교", "인건비", "급여", "매출", "지출", "비용", "손익")
         ):
             return self._period_comparison_reply(business=business, periods=periods)
 
-        # 1. 원천세 및 급여 납부일 질문
         if any(keyword in normalized for keyword in self.WITHHOLDING_TAX_KEYWORDS):
             return self._withholding_tax_reply(business=business, year=year, month=month)
 
-        # 2. 절세 방법 및 팁 질문
         if any(keyword in normalized for keyword in self.TAX_SAVING_KEYWORDS):
             return self._tax_saving_reply(business=business, year=year, month=month)
 
-        # 3. 법령 해석 및 근거 질문
         if any(keyword in normalized for keyword in self.LAW_KEYWORDS):
             return self._law_reply(business=business, year=year, month=month)
 
-        # 4. 공제/불공제 검토 질문
         if any(keyword in normalized for keyword in self.DEDUCTION_KEYWORDS):
             return self._deduction_reply(business=business, year=year, month=month)
 
-        # 5. 부가세 예상액 및 세금 계산 질문
         if any(keyword in normalized for keyword in self.VAT_KEYWORDS):
             return self._vat_reply(business=business, year=year, month=month)
 
-        # 6. 증감 추이 분석 질문
         if any(keyword in normalized for keyword in self.ANALYTICS_KEYWORDS):
             return self._analytics_reply(business=business, year=year, month=month)
 
-        # 7. 거래/매출/매입 요약 질문
         if any(keyword in normalized for keyword in self.TRANSACTION_KEYWORDS):
             return self._transaction_reply(business=business, year=year, month=month)
 
@@ -138,7 +131,7 @@ class RuleBasedChatResponder:
         )
 
     def _withholding_tax_reply(self, *, business, year, month):
-        """원천세 납부 기한 및 인건비 원천징수 현황 안내."""
+        """급여 원천징수 현황과 납부 기한을 안내한다."""
         payroll = get_payroll_summary(business.id, year, month)
         withholding_tax = payroll.get("withholding_tax", 0)
         total_gross_pay = payroll.get("total_gross_pay", 0)
@@ -147,7 +140,7 @@ class RuleBasedChatResponder:
         net_pay_total = payroll.get("net_pay_total", 0)
         employee_count = payroll.get("employee_count", 0)
 
-        # 다음 달 10일 계산
+        # 12월 지급분도 다음 해 1월 10일로 넘어가도록 계산한다.
         next_month = 1 if month == 12 else month + 1
         next_year = year + 1 if month == 12 else year
         due_date_str = f"{next_year}년 {next_month}월 10일"
@@ -183,7 +176,7 @@ class RuleBasedChatResponder:
         )
 
     def _tax_saving_reply(self, *, business, year, month):
-        """카페 사장님을 위한 4대 실질 절세 가이드."""
+        """카페 운영에서 확인할 주요 부가세 절세 항목을 안내한다."""
         content = (
             f"💡 **{business.business_name} 사장님을 위한 4대 카페 부가세 절세 전략**\n\n"
             f"1. **🥛 우유·생과일 의제매입세액 공제 챙기기**\n"
@@ -205,7 +198,7 @@ class RuleBasedChatResponder:
         )
 
     def _law_reply(self, *, business, year, month):
-        """공식 세법 조항 및 법령 근거 안내."""
+        """카페 운영과 관련된 주요 법령 근거를 안내한다."""
         content = (
             f"📜 **카페 운영 관련 주요 세법 및 법령 근거**\n\n"
             f"• **부가가치세법 제42조 (면세농산물등 의제매입세액 공제특례)**\n"

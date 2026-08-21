@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class DeepDiagnosisService:
-    """8월 경영 종합 진단 리포트 (모달 팝업 전용 심층 진단 서비스 - OpenAI 실시간 추론 연동)."""
+    """월간 경영 지표와 OpenAI 분석을 심층 진단 응답으로 구성한다."""
 
     @classmethod
     def get_deep_diagnosis(cls, business: Business, year: int, month: int) -> dict:
         year_month_str = f"{year:04d}-{month:02d}"
 
-        # 1. 상권 벤치마크 지표 + 이번 달 실제 장부 데이터 집계
+        # 상권과 사업장 지표를 같은 연월 기준으로 맞춘다.
         benchmark = BenchmarkCalculator._get_or_create_benchmark(year_month_str)
         metrics = BenchmarkCalculator._calculate_month_metrics(business, year, month)
 
@@ -32,12 +32,11 @@ class DeepDiagnosisService:
         supplies_ratio = metrics["my_supplies_pct"]
         rent_ratio = metrics["my_rent_pct"]
 
-        # 2. 수익성 및 비율 계산
+        # 진단 문장의 근거가 되는 수익성과 비용 비율을 계산한다.
         net_profit = total_revenue - total_expense
         profit_margin = round(float(net_profit / total_revenue * 100), 1) if total_revenue > 0 else 0.0
 
-        # 3. 최근 6개월 평균 매출. 카드 집계뿐 아니라 건별 매출까지 포함하고
-        # 1~5월에도 전년도 월을 정상적으로 포함한다.
+        # 연도 경계를 포함한 최근 6개월의 전체 매출 채널을 평균낸다.
         m_sales_list = []
         for offset in range(-5, 1):
             t_year, t_month = BenchmarkCalculator._shift_month(year, month, offset)
@@ -51,7 +50,7 @@ class DeepDiagnosisService:
         avg_revenue_6m = int(sum(m_sales_list) / len(m_sales_list)) if m_sales_list else int(total_revenue)
         rev_vs_6m_pct = round(((float(total_revenue) - avg_revenue_6m) / avg_revenue_6m) * 100, 1) if avg_revenue_6m > 0 else 0.0
 
-        # 4. 비용 구조 정밀 진단 (지출 대비 비중 순위)
+        # 총지출에서 차지하는 비중이 큰 비용부터 개선 우선순위를 정한다.
         cost_structure_diagnosis = [
             {
                 "category": "PAYROLL",
@@ -87,7 +86,7 @@ class DeepDiagnosisService:
             },
         ]
 
-        # 5. 비용 절감 시뮬레이션 (인건비 5% 효율화 달성 시)
+        # 가장 큰 비용인 인건비를 5% 줄였을 때의 효과를 예시로 계산한다.
         saved_labor = int(payroll_cost * Decimal("0.05"))
         simulated_profit = int(net_profit) + saved_labor
         simulated_margin = round(float(Decimal(simulated_profit) / total_revenue * 100), 1) if total_revenue > 0 else 0.0
@@ -107,7 +106,7 @@ class DeepDiagnosisService:
             "margin_diff_pct": margin_diff,
         }
 
-        # 6. 기본 동적 계산 값 구성 (Fallback)
+        # OpenAI 호출 실패에도 동일한 응답 형식을 유지할 기본 진단을 만든다.
         diff_labor_raw = round(labor_ratio - raw_mat_ratio, 1)
         headline = f"수익성은 {profit_margin}%로 양호하나, 인건비가 총지출의 {cost_structure_diagnosis[0]['share_of_expense']}%를 차지해 핵심 관리 포인트입니다."
 
@@ -174,7 +173,7 @@ class DeepDiagnosisService:
             },
         ]
 
-        # 7. OpenAI GPT 실시간 심층 작문 시도
+        # API 키가 있을 때만 기본 진단을 OpenAI 문장으로 보완한다.
         if settings.OPENAI_API_KEY and not getattr(settings, "IS_TEST_RUN", False):
             try:
                 client = get_client()

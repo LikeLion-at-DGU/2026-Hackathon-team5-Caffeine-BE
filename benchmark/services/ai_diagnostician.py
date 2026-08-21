@@ -27,7 +27,7 @@ from transactions.services.querysets import effective_purchase_transactions
 
 
 class RuleBasedDiagnostician:
-    """OpenAI API 미설정 또는 호출 실패 시 실제 매장 거래 데이터를 정밀 분석하여 실전형 원포인트 처방을 도출하는 안전장치."""
+    """OpenAI를 사용할 수 없을 때 실제 장부로 기본 경영 진단을 제공한다."""
 
     @classmethod
     def diagnose(cls, calc: BenchmarkCalculationResult) -> AIDiagnosisResult:
@@ -56,7 +56,7 @@ class RuleBasedDiagnostician:
             score = 65
             grade_label = "주의 — 하위 30% 매장"
 
-        # 1. 실제 매장의 8월 거래 내역 분석
+        # 규칙 기반 응답도 현재 조회 월의 실제 거래를 근거로 만든다.
         year, month = map(int, calc.year_month.split("-"))
         start_date, end_date = month_range(year, month)
         all_purchases = effective_purchase_transactions(
@@ -68,7 +68,7 @@ class RuleBasedDiagnostician:
             expense_purpose=Transaction.ExpensePurpose.BUSINESS,
         )
 
-        # (1) 면세 의제매입 대상(우유 등) 탐색 (가장 큰 매입처 우선)
+        # 절세 효과가 큰 후보를 보여주기 위해 가장 큰 면세 원재료를 선택한다.
         deemed_tx = purchases.filter(
             category=Transaction.Category.RAW_MATERIAL,
             vat_amount=0,
@@ -77,7 +77,7 @@ class RuleBasedDiagnostician:
         milk_amount = int(deemed_tx.total_amount) if deemed_tx else 0
         deemed_vat_saving = int(milk_amount * Decimal(9) / Decimal(109))
 
-        # (2) 개인 지출(불공제) 탐색
+        # 불공제 위험을 설명할 수 있도록 개인 지출을 별도로 집계한다.
         personal_txs = all_purchases.filter(
             expense_purpose=Transaction.ExpensePurpose.PERSONAL
         )
@@ -85,19 +85,19 @@ class RuleBasedDiagnostician:
         personal_sum = sum(int(t.total_amount) for t in personal_txs)
         personal_names = "·".join([t.merchant_name.split()[0] for t in personal_txs[:3]]) if personal_txs.exists() else "개인 지출"
 
-        # (3) 포장재/소모품 탐색
+        # 실행 가능한 비용 절감 예시를 위해 대표 소모품 거래를 찾는다.
         supplies_tx = purchases.filter(
             category=Transaction.Category.SUPPLIES
         ).first()
         supplies_merchant = supplies_tx.merchant_name if supplies_tx else "소모품 거래처"
         supplies_amount = int(supplies_tx.total_amount) if supplies_tx else 0
 
-        # (4) 인건비 비중
+        # 상권 평균과 차이가 큰 인건비를 주요 관리 지표로 사용한다.
         labor_item = next((item for item in calc.category_comparison if item.category == "PAYROLL"), None)
         labor_ratio = labor_item.my_ratio if labor_item else 0.0
         labor_bm = labor_item.benchmark_ratio if labor_item else 0.0
 
-        # 2. 실제 데이터 100% 매칭 3대 실전 처방
+        # 외부 모델이 없어도 시연 가능한 세 가지 근거 기반 처방을 제공한다.
         prescriptions = [
             {
                 "id": 1,
@@ -116,7 +116,7 @@ class RuleBasedDiagnostician:
             },
         ]
 
-        # 3. 3대 핵심 요약
+        # 화면에서 바로 읽을 수 있도록 핵심 진단을 세 문장으로 제한한다.
         summary_points = [
             f"식자재 원가율({calc.raw_material_ratio:.1f}%)은 상권 평균({calc.benchmark_raw_material_ratio:.1f}%)과 비교해 관리 중이며, 포장재 대량 발주 시 추가적인 비용 절감이 가능합니다.",
             f"{month}월 인건비 비중({labor_ratio:.1f}%)은 상권 평균({labor_bm:.1f}%) 대비 관리되고 있으며, 유휴 시간대 고마진 세트 판매로 매출 효율을 높일 수 있습니다.",
@@ -134,7 +134,7 @@ class RuleBasedDiagnostician:
 
 
 class AIDiagnostician:
-    """OpenAI를 활용하여 소상공인 맞춤형 AI 경영 진단 및 원포인트 처방을 생성한다."""
+    """정량 지표를 근거로 OpenAI 경영 진단과 실행 과제를 생성한다."""
 
     def __init__(self, client=None):
         self.client = client
@@ -227,7 +227,7 @@ class AIDiagnostician:
             prescriptions = parsed.get("prescriptions", [])
             summary_points = parsed.get("summary_points", [])
 
-            # 유효성 검사
+            # 화면 계약에 필요한 두 목록이 없으면 규칙 기반 응답으로 대체한다.
             if not prescriptions or not summary_points:
                 raise ValueError("JSON 응답 필수 키 누락")
 
